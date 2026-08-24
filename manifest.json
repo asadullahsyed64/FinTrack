@@ -1,0 +1,21 @@
+{
+  "name": "FinTrack — Personal Finance Dashboard",
+  "short_name": "FinTrack",
+  "description": "Your personal finance dashboard. Track income, expenses, savings, goals, debts, and bills offline.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0d0f1a",
+  "theme_color": "#6c63ff",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2953/2953361.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2953/2953361.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

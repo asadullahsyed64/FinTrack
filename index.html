@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-accent="purple">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="FinTrack — Complete Personal Finance & Wealth Management Suite." />
+  <meta name="theme-color" content="#6c63ff" />
+  <link rel="manifest" href="manifest.json" />
+  <title>FinTrack | Personal Finance Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ===== SECURITY PIN LOCK OVERLAY ===== -->
+  <div class="pin-screen" id="pinScreen" style="display:none">
+    <div class="pin-card">
+      <div class="pin-icon"><i class="fas fa-lock"></i></div>
+      <h2>FinTrack Security</h2>
+      <p id="pinInstruction">Enter your 4-digit PIN to access your finances</p>
+      
+      <div class="pin-dots" id="pinDots">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </div>
+      <div class="pin-error" id="pinError"></div>
+
+      <div class="pin-keypad">
+        <button class="key-btn" data-key="1">1</button>
+        <button class="key-btn" data-key="2">2</button>
+        <button class="key-btn" data-key="3">3</button>
+        <button class="key-btn" data-key="4">4</button>
+        <button class="key-btn" data-key="5">5</button>
+        <button class="key-btn" data-key="6">6</button>
+        <button class="key-btn" data-key="7">7</button>
+        <button class="key-btn" data-key="8">8</button>
+        <button class="key-btn" data-key="9">9</button>
+        <button class="key-btn action" id="pinClear">C</button>
+        <button class="key-btn" data-key="0">0</button>
+        <button class="key-btn action" id="pinBackspace"><i class="fas fa-backspace"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <div class="logo-icon"><i class="fas fa-wallet"></i></div>
+        <span class="logo-text">Fin<span class="accent">Track</span></span>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle Sidebar">
+        <i class="fas fa-bars"></i>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-page="dashboard">
+        <i class="fas fa-th-large"></i>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="nav-item" data-page="transactions">
+        <i class="fas fa-exchange-alt"></i>
+        <span>Transactions</span>
+      </a>
+      <a href="#" class="nav-item" data-page="budget">
+        <i class="fas fa-sliders-h"></i>
+        <span>Budget</span>
+      </a>
+      <a href="#" class="nav-item" data-page="savings">
+        <i class="fas fa-piggy-bank"></i>
+        <span>Savings Goals</span>
+      </a>
+      <a href="#" class="nav-item" data-page="debts">
+        <i class="fas fa-hand-holding-dollar"></i>
+        <span>Debt Tracker</span>
+      </a>
+      <a href="#" class="nav-item" data-page="bills">
+        <i class="fas fa-file-invoice-dollar"></i>
+        <span>Bills & Reminders</span>
+      </a>
+      <a href="#" class="nav-item" data-page="calendar">
+        <i class="fas fa-calendar-days"></i>
+        <span>Calendar View</span>
+      </a>
+      <a href="#" class="nav-item" data-page="reports">
+        <i class="fas fa-chart-pie"></i>
+        <span>Analytics & YoY</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-card" id="userCardTrigger" title="Edit Profile & Settings">
+        <div class="user-avatar" id="userAvatar">AS</div>
+        <div class="user-info">
+          <span class="user-name" id="userName">Asad Ullah</span>
+          <span class="user-role" id="userRole">Personal Account</span>
+        </div>
+        <i class="fas fa-gear profile-gear"></i>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="main" id="main">
+
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="page-title" id="pageTitle">Dashboard</h1>
+        <span class="page-subtitle" id="currentDate"></span>
+      </div>
+      <div class="topbar-right">
+
+        <!-- Multi-Currency Selector -->
+        <select class="topbar-select" id="currencySelect" title="Select Currency">
+          <option value="INR">₹ INR</option>
+          <option value="USD">$ USD</option>
+          <option value="EUR">€ EUR</option>
+          <option value="GBP">£ GBP</option>
+          <option value="JPY">¥ JPY</option>
+          <option value="AUD">A$ AUD</option>
+        </select>
+
+        <!-- Accent Color Picker Palette -->
+        <div class="color-picker-dropdown" id="colorPickerWrap">
+          <button class="topbar-icon-btn" id="colorPickerBtn" title="Customize Theme Accent">
+            <i class="fas fa-palette"></i>
+          </button>
+          <div class="color-menu" id="colorMenu">
+            <span class="menu-title">Accent Theme</span>
+            <div class="color-options">
+              <span class="color-dot purple active" data-accent="purple" title="Royal Purple"></span>
+              <span class="color-dot teal" data-accent="teal" title="Cyber Teal"></span>
+              <span class="color-dot emerald" data-accent="emerald" title="Emerald Green"></span>
+              <span class="color-dot amber" data-accent="amber" title="Sunset Amber"></span>
+              <span class="color-dot rose" data-accent="rose" title="Rose Pink"></span>
+              <span class="color-dot indigo" data-accent="indigo" title="Electric Indigo"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Import CSV Button -->
+        <button class="export-btn secondary" id="importCsvBtn" title="Import transactions from CSV">
+          <i class="fas fa-file-import"></i>
+          <span>Import</span>
+        </button>
+
+        <!-- Export CSV Button -->
+        <button class="export-btn" id="exportBtn" title="Export transactions as CSV">
+          <i class="fas fa-download"></i>
+          <span>Export</span>
+        </button>
+
+        <!-- Security Lock Toggle -->
+        <button class="topbar-icon-btn" id="lockAppBtn" title="Lock App Now">
+          <i class="fas fa-lock" id="lockIcon"></i>
+        </button>
+
+        <!-- Theme Toggle -->
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle Theme">
+          <i class="fas fa-moon" id="themeIcon"></i>
+        </button>
+
+        <!-- Notifications -->
+        <div class="notification-btn" id="notifBtn">
+          <i class="fas fa-bell"></i>
+          <span class="notif-badge" id="notifBadge" style="display:none">0</span>
+        </div>
+
+      </div>
+    </header>
+
+    <!-- ===== PAGE: DASHBOARD ===== -->
+    <div id="pageDashboard" class="page active">
+
+      <!-- Empty State -->
+      <div class="empty-state" id="emptyState" style="display:none">
+        <div class="empty-icon"><i class="fas fa-wallet"></i></div>
+        <h2>Welcome to FinTrack!</h2>
+        <p>Start logging your income, expenses, and savings goals to unlock your financial insights.</p>
+        <button class="btn-primary" id="emptyAddBtn">
+          <i class="fas fa-plus"></i> Add Your First Transaction
+        </button>
+      </div>
+
+      <!-- Dashboard Content -->
+      <div id="dashboardContent">
+
+        <!-- AI-Style Smart Insights Widget -->
+        <section class="insights-section">
+          <div class="insights-card">
+            <div class="insights-header">
+              <div class="insights-title">
+                <i class="fas fa-wand-magic-sparkles"></i>
+                <span>Smart Financial Insights</span>
+              </div>
+              <span class="insights-badge">AI Powered</span>
+            </div>
+            <div class="insights-grid" id="insightsGrid">
+              <!-- Dynamically Populated Insight Cards -->
+            </div>
+          </div>
+        </section>
+
+        <!-- KPI Cards -->
+        <section class="kpi-grid">
+
+          <div class="kpi-card income-card">
+            <div class="kpi-icon"><i class="fas fa-arrow-trend-up"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-label">Total Income</span>
+              <span class="kpi-value" id="incomeValue">₹0</span>
+              <span class="kpi-change positive" id="incomeChange"><i class="fas fa-caret-up"></i> This month</span>
+            </div>
+            <div class="kpi-sparkline"><canvas id="sparkIncome"></canvas></div>
+          </div>
+
+          <div class="kpi-card expense-card">
+            <div class="kpi-icon"><i class="fas fa-arrow-trend-down"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-label">Total Expenses</span>
+              <span class="kpi-value" id="expenseValue">₹0</span>
+              <span class="kpi-change negative" id="expenseChange"><i class="fas fa-caret-down"></i> This month</span>
+            </div>
+            <div class="kpi-sparkline"><canvas id="sparkExpense"></canvas></div>
+          </div>
+
+          <div class="kpi-card savings-card">
+            <div class="kpi-icon"><i class="fas fa-piggy-bank"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-label">Net Savings</span>
+              <span class="kpi-value" id="savingsValue">₹0</span>
+              <span class="kpi-change positive" id="savingsChange"><i class="fas fa-caret-up"></i> 0% save rate</span>
+            </div>
+            <div class="kpi-sparkline"><canvas id="sparkSavings"></canvas></div>
+          </div>
+
+          <div class="kpi-card balance-card">
+            <div class="kpi-icon"><i class="fas fa-wallet"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-label">Current Balance</span>
+              <span class="kpi-value" id="balanceValue">₹0</span>
+              <span class="kpi-change" id="balanceChange"><i class="fas fa-caret-up"></i> Healthy</span>
+            </div>
+            <div class="kpi-sparkline"><canvas id="sparkBalance"></canvas></div>
+          </div>
+
+        </section>
+
+        <!-- Charts Row -->
+        <section class="charts-row">
+
+          <!-- Bar Chart -->
+          <div class="chart-card wide">
+            <div class="chart-card-header">
+              <div>
+                <h3>Monthly Overview</h3>
+                <p>Income vs Expenses</p>
+              </div>
+              <div class="chart-actions">
+                <button class="chip active" id="filter6m">6M</button>
+                <button class="chip" id="filter3m">3M</button>
+                <button class="chip" id="filter1m">1M</button>
+              </div>
+            </div>
+            <div class="chart-wrapper"><canvas id="barChart"></canvas></div>
+          </div>
+
+          <!-- Donut Chart -->
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <h3>Spending Breakdown</h3>
+                <p>By category this month</p>
+              </div>
+            </div>
+            <div class="chart-wrapper donut-wrapper"><canvas id="donutChart"></canvas></div>
+            <div class="donut-legend" id="donutLegend"></div>
+          </div>
+
+        </section>
+
+        <!-- Line Chart + Transactions -->
+        <section class="bottom-row">
+
+          <!-- Line Chart -->
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <h3>Balance Trend</h3>
+                <p>Running balance over time</p>
+              </div>
+            </div>
+            <div class="chart-wrapper"><canvas id="lineChart"></canvas></div>
+          </div>
+
+          <!-- Recent Transactions -->
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <h3>Recent Transactions</h3>
+                <p>Last 5 activities</p>
+              </div>
+              <button class="see-all-btn" id="seeAllBtn">See All <i class="fas fa-arrow-right"></i></button>
+            </div>
+            <div class="transactions-list" id="transactionsList"></div>
+            <div class="no-txn-msg" id="noTxnMsg" style="display:none">
+              <i class="fas fa-receipt"></i>
+              <p>No transactions logged yet.</p>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- Bill Due Alert Strip on Dashboard -->
+        <section class="dash-bills-widget" id="dashBillsWidget" style="display:none">
+          <div class="dash-bills-card">
+            <div class="dash-bills-header">
+              <h4><i class="fas fa-clock"></i> Upcoming Bills Due Soon</h4>
+              <button class="btn-sm" onclick="navigateTo('bills')">Manage Bills</button>
+            </div>
+            <div class="dash-bills-list" id="dashBillsList"></div>
+          </div>
+        </section>
+
+        <!-- Budget Progress -->
+        <section class="budget-section">
+          <div class="chart-card full-width">
+            <div class="chart-card-header">
+              <div>
+                <h3>Monthly Budget Limits</h3>
+                <p>Tracking category limits</p>
+              </div>
+              <span class="budget-month" id="budgetMonth"></span>
+            </div>
+            <div class="budget-grid" id="budgetGrid"></div>
+          </div>
+        </section>
+      </div><!-- /dashboardContent -->
+    </div><!-- /pageDashboard -->
+
+
+    <!-- ===== PAGE: TRANSACTIONS ===== -->
+    <div id="pageTransactions" class="page" style="display:none">
+      <div class="page-inner">
+
+        <!-- Search & Filter Control Bar -->
+        <div class="txn-search-bar">
+          <div class="search-input-wrap">
+            <i class="fas fa-search search-icon"></i>
+            <input type="text" id="txnSearchInput" placeholder="Search description, notes, tags (#vacation)..." />
+            <button class="clear-search" id="clearSearchBtn" style="display:none"><i class="fas fa-times"></i></button>
+          </div>
+
+          <div class="txn-filters">
+            <select id="txnFilterType" class="filter-select">
+              <option value="all">All Types</option>
+              <option value="income">Income Only</option>
+              <option value="expense">Expense Only</option>
+            </select>
+
+            <select id="txnFilterCat" class="filter-select">
+              <option value="all">All Categories</option>
+            </select>
+
+            <select id="txnFilterTag" class="filter-select">
+              <option value="all">All Tags</option>
+            </select>
+
+            <input type="date" id="txnFilterStartDate" class="filter-select" title="Start Date" />
+            <input type="date" id="txnFilterEndDate" class="filter-select" title="End Date" />
+
+            <button class="btn-secondary" id="resetFiltersBtn" title="Reset All Filters">
+              <i class="fas fa-rotate-left"></i> Reset
+            </button>
+          </div>
+        </div>
+
+        <div class="txn-page-header">
+          <div class="txn-summary-strip" id="txnSummaryStrip">
+            <span class="strip-item green"><i class="fas fa-arrow-up"></i> Income: <strong id="stripIncome">₹0</strong></span>
+            <span class="strip-item red"><i class="fas fa-arrow-down"></i> Expenses: <strong id="stripExpense">₹0</strong></span>
+            <span class="strip-item purple"><i class="fas fa-wallet"></i> Net: <strong id="stripNet">₹0</strong></span>
+          </div>
+        </div>
+
+        <div class="txn-table-wrap">
+          <table class="txn-table" id="txnTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description & Notes</th>
+                <th>Category</th>
+                <th>Tag</th>
+                <th>Type</th>
+                <th>Amount</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="txnTableBody"></tbody>
+          </table>
+          <div class="no-txn-full" id="noTxnFull" style="display:none">
+            <i class="fas fa-inbox"></i>
+            <p>No matching transactions found.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ===== PAGE: BUDGET ===== -->
+    <div id="pageBudget" class="page" style="display:none">
+      <div class="page-inner">
+        <div class="budget-page-intro">
+          <p><i class="fas fa-circle-info"></i> Set monthly spending limits per category. FinTrack will alert you when spending approaches or exceeds your limit.</p>
+        </div>
+        <div class="budget-editor-grid" id="budgetEditorGrid"></div>
+        <div class="budget-save-row">
+          <button class="btn-primary" id="saveBudgetsBtn"><i class="fas fa-save"></i> Save Budget Limits</button>
+          <span class="save-confirmation" id="saveConfirmation" style="display:none"><i class="fas fa-check-circle"></i> Budgets Saved!</span>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ===== PAGE: SAVINGS GOALS ===== -->
+    <div id="pageSavings" class="page" style="display:none">
+      <div class="page-inner">
+        <div class="section-header-row">
+          <div>
+            <h2>Savings Goals Hub</h2>
+            <p class="section-subtitle">Set financial targets, track deposit progress, and reach milestones faster.</p>
+          </div>
+          <button class="btn-primary" id="addGoalBtn"><i class="fas fa-plus"></i> New Savings Goal</button>
+        </div>
+
+        <div class="goals-grid" id="goalsGrid"></div>
+      </div>
+    </div>
+
+
+    <!-- ===== PAGE: DEBT TRACKER ===== -->
+    <div id="pageDebts" class="page" style="display:none">
+      <div class="page-inner">
+        <div class="section-header-row">
+          <div>
+            <h2>Debt & EMI Tracker</h2>
+            <p class="section-subtitle">Monitor loans, credit balances, and EMIs to stay on top of payoff dates.</p>
+          </div>
+          <button class="btn-primary" id="addDebtBtn"><i class="fas fa-plus"></i> Add New Debt/Loan</button>
+        </div>
+
+        <div class="debts-grid" id="debtsGrid"></div>
+      </div>
+    </div>
+
+
+    <!-- ===== PAGE: BILLS & REMINDERS ===== -->
+    <div id="pageBills" class="page" style="display:none">
+      <div class="page-inner">
+        <div class="section-header-row">
+          <div>
+            <h2>Bill Reminders & Recurring Payments</h2>
+            <p class="section-subtitle">Never miss a due date. Track subscriptions, utilities, and recurring bills.</p>
+          </div>
+          <button class="btn-primary" id="addBillBtn"><i class="fas fa-plus"></i> Add Bill Reminder</button>
+        </div>
+
+        <div class="bills-list-wrap" id="billsListWrap"></div>
+      </div>
+    </div>
+
+
+    <!-- ===== PAGE: CALENDAR VIEW ===== -->
+    <div id="pageCalendar" class="page" style="display:none">
+      <div class="page-inner">
+        <div class="calendar-controls">
+          <div class="cal-nav">
+            <button class="btn-icon" id="calPrevBtn"><i class="fas fa-chevron-left"></i></button>
+            <h2 id="calMonthYear">August 2026</h2>
+            <button class="btn-icon" id="calNextBtn"><i class="fas fa-chevron-right"></i></button>
+          </div>
+          <button class="btn-secondary" id="calTodayBtn">Today</button>
+        </div>
+
+        <div class="calendar-grid-header">
+          <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+      </div>
+    </div>
+
+
+    <!-- ===== PAGE: REPORTS & YOY ===== -->
+    <div id="pageReports" class="page" style="display:none">
+      <div class="page-inner">
+        <div class="section-header-row">
+          <div>
+            <h2>Financial Analytics & YoY Reports</h2>
+            <p class="section-subtitle">Multi-year breakdowns, income vs spending trends, and annual balance reports.</p>
+          </div>
+          <button class="btn-secondary" id="printReportBtn"><i class="fas fa-print"></i> Print / Export Report</button>
+        </div>
+
+        <div class="reports-grid">
+          <div class="chart-card wide">
+            <div class="chart-card-header">
+              <h3>Year-Over-Year Multi-Year Comparison</h3>
+              <p>Income & Expenses comparison across recent years</p>
+            </div>
+            <div class="chart-wrapper"><canvas id="yoyChart"></canvas></div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <h3>Annual Spending Category Share</h3>
+              <p>Total distribution across categories</p>
+            </div>
+            <div class="chart-wrapper donut-wrapper"><canvas id="annualDonutChart"></canvas></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main><!-- /main -->
+
+
+  <!-- ===== FLOATING ADD BUTTON ===== -->
+  <button class="fab" id="fabBtn" title="Add Transaction">
+    <i class="fas fa-plus"></i>
+  </button>
+
+
+  <!-- ===== ADD/EDIT TRANSACTION MODAL ===== -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="txnModal">
+      <div class="modal-header">
+        <h2 id="modalTitle">Add Transaction</h2>
+        <button class="modal-close" id="modalClose"><i class="fas fa-times"></i></button>
+      </div>
+
+      <input type="hidden" id="editTxnId" value="" />
+
+      <!-- Type Toggle -->
+      <div class="type-toggle">
+        <button class="type-btn active" id="typeIncome" data-type="income">
+          <i class="fas fa-arrow-trend-up"></i> Income
+        </button>
+        <button class="type-btn" id="typeExpense" data-type="expense">
+          <i class="fas fa-arrow-trend-down"></i> Expense
+        </button>
+      </div>
+
+      <form id="txnForm" class="txn-form" novalidate>
+        <div class="form-group">
+          <label for="txnAmount">Amount <span class="required">*</span></label>
+          <div class="input-icon-wrap">
+            <span class="input-prefix" id="formCurrencyPrefix">₹</span>
+            <input type="number" id="txnAmount" placeholder="e.g. 5000" min="0.01" step="any" required />
+          </div>
+          <span class="field-error" id="amountError"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="txnCategory">Category <span class="required">*</span></label>
+          <select id="txnCategory" required>
+            <option value="">-- Select Category --</option>
+          </select>
+          <span class="field-error" id="categoryError"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="txnDesc">Description <span class="required">*</span></label>
+          <input type="text" id="txnDesc" placeholder="e.g. Salary, Grocery, Rent..." maxlength="80" required />
+          <span class="field-error" id="descError"></span>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="txnTag">Tag (Optional)</label>
+            <input type="text" id="txnTag" placeholder="e.g. #vacation, #work" maxlength="30" />
+          </div>
+
+          <div class="form-group">
+            <label for="txnDate">Date <span class="required">*</span></label>
+            <input type="date" id="txnDate" required />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="txnNotes">Notes / Detail (Optional)</label>
+          <textarea id="txnNotes" rows="2" placeholder="Additional notes or receipt info..."></textarea>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="txnRecurringCheck" />
+            <span>Set as Recurring Transaction</span>
+          </label>
+        </div>
+
+        <div class="form-group" id="recurringFreqWrap" style="display:none">
+          <label for="txnRecurringFreq">Repeat Frequency</label>
+          <select id="txnRecurringFreq">
+            <option value="monthly">Monthly</option>
+            <option value="weekly">Weekly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </div>
+
+        <button type="submit" class="btn-primary full-width" id="submitTxnBtn">
+          <i class="fas fa-check-circle"></i> Save Transaction
+        </button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ===== SAVINGS GOAL MODAL ===== -->
+  <div class="modal-overlay" id="goalModalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="goalModalTitle">Add Savings Goal</h2>
+        <button class="modal-close" id="goalModalClose"><i class="fas fa-times"></i></button>
+      </div>
+
+      <form id="goalForm" class="txn-form">
+        <input type="hidden" id="editGoalId" value="" />
+        <div class="form-group">
+          <label for="goalTitle">Goal Title <span class="required">*</span></label>
+          <input type="text" id="goalTitle" placeholder="e.g. Emergency Fund, New Laptop" required />
+        </div>
+        <div class="form-group">
+          <label for="goalTarget">Target Amount <span class="required">*</span></label>
+          <input type="number" id="goalTarget" placeholder="e.g. 50000" min="1" step="any" required />
+        </div>
+        <div class="form-group">
+          <label for="goalCurrent">Initial Saved Amount</label>
+          <input type="number" id="goalCurrent" placeholder="0" min="0" step="any" />
+        </div>
+        <div class="form-group">
+          <label for="goalTargetDate">Target Date</label>
+          <input type="date" id="goalTargetDate" />
+        </div>
+
+        <button type="submit" class="btn-primary full-width"><i class="fas fa-save"></i> Save Goal</button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ===== GOAL DEPOSIT/WITHDRAW MODAL ===== -->
+  <div class="modal-overlay" id="depositModalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Deposit / Withdraw</h2>
+        <button class="modal-close" id="depositModalClose"><i class="fas fa-times"></i></button>
+      </div>
+      <form id="depositForm" class="txn-form">
+        <input type="hidden" id="depositGoalId" value="" />
+        <div class="form-group">
+          <label>Action</label>
+          <select id="depositAction">
+            <option value="deposit">+ Deposit to Goal</option>
+            <option value="withdraw">- Withdraw from Goal</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="depositAmount">Amount <span class="required">*</span></label>
+          <input type="number" id="depositAmount" min="0.01" step="any" required placeholder="Enter amount" />
+        </div>
+        <button type="submit" class="btn-primary full-width">Confirm Action</button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ===== DEBT MODAL ===== -->
+  <div class="modal-overlay" id="debtModalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Add Debt / Loan</h2>
+        <button class="modal-close" id="debtModalClose"><i class="fas fa-times"></i></button>
+      </div>
+      <form id="debtForm" class="txn-form">
+        <input type="hidden" id="editDebtId" value="" />
+        <div class="form-group">
+          <label for="debtTitle">Debt Title <span class="required">*</span></label>
+          <input type="text" id="debtTitle" placeholder="e.g. Car Loan, Credit Card" required />
+        </div>
+        <div class="form-group">
+          <label for="debtTotal">Total Loan Amount <span class="required">*</span></label>
+          <input type="number" id="debtTotal" placeholder="e.g. 150000" min="1" step="any" required />
+        </div>
+        <div class="form-group">
+          <label for="debtPaid">Amount Paid So Far</label>
+          <input type="number" id="debtPaid" placeholder="0" min="0" step="any" />
+        </div>
+        <div class="form-group">
+          <label for="debtInterest">Interest Rate % (Optional)</label>
+          <input type="number" id="debtInterest" placeholder="e.g. 8.5" step="0.1" />
+        </div>
+        <button type="submit" class="btn-primary full-width"><i class="fas fa-save"></i> Save Debt</button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ===== BILL REMINDER MODAL ===== -->
+  <div class="modal-overlay" id="billModalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Add Bill Reminder</h2>
+        <button class="modal-close" id="billModalClose"><i class="fas fa-times"></i></button>
+      </div>
+      <form id="billForm" class="txn-form">
+        <input type="hidden" id="editBillId" value="" />
+        <div class="form-group">
+          <label for="billTitle">Bill Name <span class="required">*</span></label>
+          <input type="text" id="billTitle" placeholder="e.g. Electricity, Broadband" required />
+        </div>
+        <div class="form-group">
+          <label for="billAmount">Bill Amount <span class="required">*</span></label>
+          <input type="number" id="billAmount" placeholder="e.g. 1500" min="0.01" step="any" required />
+        </div>
+        <div class="form-group">
+          <label for="billDueDate">Due Date <span class="required">*</span></label>
+          <input type="date" id="billDueDate" required />
+        </div>
+        <div class="form-group">
+          <label for="billCategory">Category</label>
+          <select id="billCategory"></select>
+        </div>
+        <button type="submit" class="btn-primary full-width"><i class="fas fa-save"></i> Save Bill Reminder</button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ===== CSV IMPORT MODAL ===== -->
+  <div class="modal-overlay" id="csvModalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Import Transactions from CSV</h2>
+        <button class="modal-close" id="csvModalClose"><i class="fas fa-times"></i></button>
+      </div>
+
+      <div class="csv-dropzone" id="csvDropzone">
+        <i class="fas fa-cloud-arrow-up drop-icon"></i>
+        <p>Drag & drop your CSV file here, or <label for="csvFileInput" class="csv-label">Browse File</label></p>
+        <input type="file" id="csvFileInput" accept=".csv" style="display:none" />
+      </div>
+
+      <div class="csv-preview" id="csvPreview" style="display:none">
+        <h4>CSV File Loaded</h4>
+        <p id="csvFileInfo"></p>
+        <button class="btn-primary full-width" id="processCsvBtn"><i class="fas fa-file-import"></i> Confirm & Import</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ===== USER PROFILE & SETTINGS MODAL ===== -->
+  <div class="modal-overlay" id="profileModalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>User Profile & Security Settings</h2>
+        <button class="modal-close" id="profileModalClose"><i class="fas fa-times"></i></button>
+      </div>
+
+      <form id="profileForm" class="txn-form">
+        <div class="form-group">
+          <label for="profName">Your Full Name</label>
+          <input type="text" id="profName" placeholder="Asad Ullah" required />
+        </div>
+
+        <div class="form-group">
+          <label for="profIncomeTarget">Monthly Income Target</label>
+          <input type="number" id="profIncomeTarget" placeholder="e.g. 60000" min="0" />
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="profPinEnable" />
+            <span>Enable 4-Digit Security PIN Lock</span>
+          </label>
+        </div>
+
+        <div class="form-group" id="profPinInputWrap" style="display:none">
+          <label for="profPin">Set 4-Digit PIN</label>
+          <input type="password" id="profPin" maxlength="4" placeholder="e.g. 1234" pattern="[0-9]{4}" />
+        </div>
+
+        <button type="submit" class="btn-primary full-width"><i class="fas fa-save"></i> Save Profile Settings</button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ===== DAY DETAIL CALENDAR POPUP MODAL ===== -->
+  <div class="modal-overlay" id="dayDetailModalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="dayDetailTitle">Day Activity</h2>
+        <button class="modal-close" id="dayDetailModalClose"><i class="fas fa-times"></i></button>
+      </div>
+      <div id="dayDetailContent" class="transactions-list"></div>
+    </div>
+  </div>
+
+
+  <!-- ===== NOTIFICATION PANEL ===== -->
+  <div class="notif-panel" id="notifPanel" style="display:none">
+    <div class="notif-panel-header">
+      <h3>Notifications & Alerts</h3>
+      <button id="clearNotifs" class="clear-notif-btn">Clear All</button>
+    </div>
+    <div class="notif-list" id="notifList">
+      <p class="no-notif">No new notifications</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
