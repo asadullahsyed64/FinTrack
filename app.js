@@ -44,25 +44,79 @@ function getCatInfo(catId) {
 }
 
 // ================================================
-// 1. LOCAL STORAGE STATE MANAGEMENT
+// 1. AUTHENTICATION & MULTI-USER STATE MANAGEMENT
 // ================================================
-function loadData(key, fallback) {
+let accounts       = loadRawData('ft_accounts', []);
+let currentSession = localStorage.getItem('ft_current_session') || null;
+
+function loadRawData(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
   catch { return fallback; }
 }
 
-function saveData(key, val) {
+function saveRawData(key, val) {
   localStorage.setItem(key, JSON.stringify(val));
 }
 
-let transactions = loadData('ft_transactions', []);
-let budgets      = loadData('ft_budgets', { housing: 15000, food: 10000, transport: 5000, shopping: 5000 });
-let goals        = loadData('ft_goals', []);
-let debts        = loadData('ft_debts', []);
-let bills        = loadData('ft_bills', []);
-let userProfile  = loadData('ft_user', { name: 'Asad Ullah', role: 'Personal Account', incomeTarget: 60000, pinEnabled: false, pin: '' });
-let currentCurrency = localStorage.getItem('ft_currency') || 'INR';
-let currentAccent   = localStorage.getItem('ft_accent')   || 'purple';
+function getUserKey(key) {
+  const userEmail = currentSession || 'guest@fintrack.app';
+  return `${key}_${userEmail.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+}
+
+function loadUserData(key, fallback) {
+  const userKey = getUserKey(key);
+  const data = localStorage.getItem(userKey);
+  if (data) {
+    try { return JSON.parse(data); } catch { return fallback; }
+  }
+  // Migration check for single-user legacy data
+  const oldData = localStorage.getItem(key);
+  if (oldData) {
+    try {
+      const parsed = JSON.parse(oldData);
+      saveUserData(key, parsed);
+      return parsed;
+    } catch { return fallback; }
+  }
+  return fallback;
+}
+
+function saveUserData(key, val) {
+  localStorage.setItem(getUserKey(key), JSON.stringify(val));
+}
+
+function saveData(key, val) {
+  saveUserData(key, val);
+}
+
+let transactions    = [];
+let budgets         = {};
+let goals           = [];
+let debts           = [];
+let bills           = [];
+let userProfile     = {};
+let currentCurrency = 'INR';
+let currentAccent   = 'purple';
+
+function reloadCurrentUserData() {
+  transactions    = loadUserData('ft_transactions', []);
+  budgets         = loadUserData('ft_budgets', { housing: 15000, food: 10000, transport: 5000, shopping: 5000 });
+  goals           = loadUserData('ft_goals', []);
+  debts           = loadUserData('ft_debts', []);
+  bills           = loadUserData('ft_bills', []);
+
+  const currentUserObj = accounts.find(a => a.email.toLowerCase() === (currentSession || '').toLowerCase());
+  const defaultName = currentUserObj ? currentUserObj.name : (currentSession === 'guest@fintrack.app' ? 'Guest User' : 'Asad Ullah');
+  const defaultRole = currentSession === 'guest@fintrack.app' ? 'Guest Sandbox Account' : 'Personal Account';
+
+  userProfile = loadUserData('ft_user', { name: defaultName, role: defaultRole, incomeTarget: 60000, pinEnabled: false, pin: '' });
+  currentCurrency = loadUserData('ft_currency', 'INR');
+  currentAccent   = loadUserData('ft_accent', 'purple');
+
+  document.documentElement.setAttribute('data-accent', currentAccent);
+  if (currencySelect) currencySelect.value = currentCurrency;
+  updateUserProfileUI();
+}
 
 // ================================================
 // 2. PWA SERVICE WORKER REGISTRATION
@@ -1437,9 +1491,130 @@ function updateChartThemes() {
 }
 
 // ================================================
-// 21. INIT LAUNCH
+// 21. AUTH UI & SESSION MANAGEMENT
 // ================================================
-checkPinOnLaunch();
-refreshDashboard();
+const authScreen     = document.getElementById('authScreen');
+const tabSignIn      = document.getElementById('tabSignIn');
+const tabSignUp      = document.getElementById('tabSignUp');
+const signInForm     = document.getElementById('signInForm');
+const signUpForm     = document.getElementById('signUpForm');
+const loginError     = document.getElementById('loginError');
+const signUpError    = document.getElementById('signUpError');
+const guestLoginBtn  = document.getElementById('guestLoginBtn');
+const sidebarLogoutBtn = document.getElementById('sidebarLogoutBtn');
+const modalLogoutBtn   = document.getElementById('modalLogoutBtn');
 
-console.log('%c💰 FinTrack Ultimate Loaded!', 'color: #6c63ff; font-size: 18px; font-weight: bold;');
+// Tab Switcher
+tabSignIn.addEventListener('click', () => {
+  tabSignIn.classList.add('active');
+  tabSignUp.classList.remove('active');
+  signInForm.style.display = 'flex';
+  signUpForm.style.display = 'none';
+  loginError.textContent  = '';
+  signUpError.textContent = '';
+});
+
+tabSignUp.addEventListener('click', () => {
+  tabSignUp.classList.add('active');
+  tabSignIn.classList.remove('active');
+  signUpForm.style.display = 'flex';
+  signInForm.style.display = 'none';
+  loginError.textContent  = '';
+  signUpError.textContent = '';
+});
+
+// Sign In Form Submit
+signInForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  loginError.textContent = '';
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const pass  = document.getElementById('loginPassword').value.trim();
+
+  const account = accounts.find(a => a.email.toLowerCase() === email);
+  if (!account) {
+    loginError.textContent = 'Account not found. Please create an account.';
+    return;
+  }
+  if (account.password !== pass) {
+    loginError.textContent = 'Incorrect password. Try again.';
+    return;
+  }
+
+  // Success Sign In
+  currentSession = account.email;
+  localStorage.setItem('ft_current_session', currentSession);
+  authScreen.style.display = 'none';
+  reloadCurrentUserData();
+  checkPinOnLaunch();
+  refreshDashboard();
+});
+
+// Sign Up Form Submit
+signUpForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  signUpError.textContent = '';
+  const name  = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim().toLowerCase();
+  const pass  = document.getElementById('regPassword').value.trim();
+
+  if (!name || !email || !pass) return;
+
+  const existing = accounts.find(a => a.email.toLowerCase() === email);
+  if (existing) {
+    signUpError.textContent = 'An account with this email already exists!';
+    return;
+  }
+
+  const newAccount = { name, email, password: pass, createdAt: new Date().toISOString() };
+  accounts.push(newAccount);
+  saveRawData('ft_accounts', accounts);
+
+  // Success Sign Up -> Auto Sign In
+  currentSession = email;
+  localStorage.setItem('ft_current_session', currentSession);
+  authScreen.style.display = 'none';
+  reloadCurrentUserData();
+  checkPinOnLaunch();
+  refreshDashboard();
+});
+
+// Guest Mode Login
+guestLoginBtn.addEventListener('click', () => {
+  currentSession = 'guest@fintrack.app';
+  localStorage.setItem('ft_current_session', currentSession);
+  authScreen.style.display = 'none';
+  reloadCurrentUserData();
+  checkPinOnLaunch();
+  refreshDashboard();
+});
+
+// Sign Out Handler
+function signOutUser() {
+  if (confirm('Are you sure you want to log out?')) {
+    localStorage.removeItem('ft_current_session');
+    currentSession = null;
+    profileModalOverlay.classList.remove('open');
+    authScreen.style.display = 'flex';
+  }
+}
+
+if (sidebarLogoutBtn) sidebarLogoutBtn.addEventListener('click', signOutUser);
+if (modalLogoutBtn)   modalLogoutBtn.addEventListener('click', signOutUser);
+
+function checkAuthSession() {
+  if (!currentSession) {
+    authScreen.style.display = 'flex';
+  } else {
+    authScreen.style.display = 'none';
+    reloadCurrentUserData();
+    checkPinOnLaunch();
+    refreshDashboard();
+  }
+}
+
+// ================================================
+// 22. INIT LAUNCH
+// ================================================
+checkAuthSession();
+
+console.log('%c💰 FinTrack Ultimate Loaded with Authentication & Guest Mode!', 'color: #6c63ff; font-size: 18px; font-weight: bold;');
