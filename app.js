@@ -94,7 +94,7 @@ let budgets         = {};
 let goals           = [];
 let debts           = [];
 let bills           = [];
-let userProfile     = {};
+let userProfile     = { name: 'User', role: 'Personal Account', incomeTarget: 60000, pinEnabled: false, pin: '' };
 let currentCurrency = 'INR';
 let currentAccent   = 'purple';
 
@@ -121,7 +121,7 @@ function reloadCurrentUserData() {
 // ================================================
 // 2. PWA SERVICE WORKER REGISTRATION
 // ================================================
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW reg error:', err));
   });
@@ -283,10 +283,28 @@ function verifyPin() {
 // 6. USER PROFILE MANAGEMENT
 // ================================================
 function updateUserProfileUI() {
-  const initials = userProfile.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2) || 'AS';
-  document.getElementById('userAvatar').textContent = initials;
-  document.getElementById('userName').textContent   = userProfile.name || 'User';
-  document.getElementById('userRole').textContent   = userProfile.role || 'Personal Account';
+  const nameStr = (userProfile && typeof userProfile.name === 'string' && userProfile.name.trim()) 
+    ? userProfile.name.trim() 
+    : 'User';
+  const roleStr = (userProfile && typeof userProfile.role === 'string' && userProfile.role.trim()) 
+    ? userProfile.role.trim() 
+    : 'Personal Account';
+
+  const initials = nameStr
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'US';
+
+  const avatarEl = document.getElementById('userAvatar');
+  const nameEl   = document.getElementById('userName');
+  const roleEl   = document.getElementById('userRole');
+
+  if (avatarEl) avatarEl.textContent = initials;
+  if (nameEl)   nameEl.textContent   = nameStr;
+  if (roleEl)   roleEl.textContent   = roleStr;
 }
 
 const profileModalOverlay = document.getElementById('profileModalOverlay');
@@ -295,11 +313,11 @@ const profileModalClose   = document.getElementById('profileModalClose');
 const profileForm         = document.getElementById('profileForm');
 
 function openProfileModal() {
-  document.getElementById('profName').value         = userProfile.name || '';
-  document.getElementById('profIncomeTarget').value = userProfile.incomeTarget || '';
-  document.getElementById('profPinEnable').checked  = userProfile.pinEnabled || false;
-  document.getElementById('profPin').value          = userProfile.pin || '';
-  document.getElementById('profPinInputWrap').style.display = userProfile.pinEnabled ? 'block' : 'none';
+  document.getElementById('profName').value         = (userProfile && userProfile.name) || '';
+  document.getElementById('profIncomeTarget').value = (userProfile && userProfile.incomeTarget) || '';
+  document.getElementById('profPinEnable').checked  = (userProfile && userProfile.pinEnabled) || false;
+  document.getElementById('profPin').value          = (userProfile && userProfile.pin) || '';
+  document.getElementById('profPinInputWrap').style.display = (userProfile && userProfile.pinEnabled) ? 'block' : 'none';
   profileModalOverlay.classList.add('open');
 }
 
@@ -322,8 +340,6 @@ profileForm.addEventListener('submit', (e) => {
   profileModalOverlay.classList.remove('open');
   refreshDashboard();
 });
-
-updateUserProfileUI();
 
 // ================================================
 // 7. SIDEBAR & PAGE NAVIGATION
