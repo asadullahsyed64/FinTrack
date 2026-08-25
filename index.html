@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark" data-accent="purple">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,11 +10,14 @@
   <title>FinTrack | Personal Finance Suite</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="style.css?v=2" />
 </head>
+
 <body>
 
   <!-- ===== AUTHENTICATION & LOGIN OVERLAY ===== -->
@@ -67,7 +71,7 @@
 
       <!-- Divider & Guest Login -->
       <div class="auth-divider"><span>OR</span></div>
-      
+
       <button class="btn-guest full-width" id="guestLoginBtn">
         <i class="fas fa-user-astronaut"></i> Continue as Guest (Sandbox)
       </button>
@@ -80,7 +84,7 @@
       <div class="pin-icon"><i class="fas fa-lock"></i></div>
       <h2>FinTrack Security</h2>
       <p id="pinInstruction">Enter your 4-digit PIN to access your finances</p>
-      
+
       <div class="pin-dots" id="pinDots">
         <span class="dot"></span>
         <span class="dot"></span>
@@ -447,8 +451,10 @@
 
         <div class="txn-page-header">
           <div class="txn-summary-strip" id="txnSummaryStrip">
-            <span class="strip-item green"><i class="fas fa-arrow-up"></i> Income: <strong id="stripIncome">₹0</strong></span>
-            <span class="strip-item red"><i class="fas fa-arrow-down"></i> Expenses: <strong id="stripExpense">₹0</strong></span>
+            <span class="strip-item green"><i class="fas fa-arrow-up"></i> Income: <strong
+                id="stripIncome">₹0</strong></span>
+            <span class="strip-item red"><i class="fas fa-arrow-down"></i> Expenses: <strong
+                id="stripExpense">₹0</strong></span>
             <span class="strip-item purple"><i class="fas fa-wallet"></i> Net: <strong id="stripNet">₹0</strong></span>
           </div>
         </div>
@@ -481,12 +487,14 @@
     <div id="pageBudget" class="page" style="display:none">
       <div class="page-inner">
         <div class="budget-page-intro">
-          <p><i class="fas fa-circle-info"></i> Set monthly spending limits per category. FinTrack will alert you when spending approaches or exceeds your limit.</p>
+          <p><i class="fas fa-circle-info"></i> Set monthly spending limits per category. FinTrack will alert you when
+            spending approaches or exceeds your limit.</p>
         </div>
         <div class="budget-editor-grid" id="budgetEditorGrid"></div>
         <div class="budget-save-row">
           <button class="btn-primary" id="saveBudgetsBtn"><i class="fas fa-save"></i> Save Budget Limits</button>
-          <span class="save-confirmation" id="saveConfirmation" style="display:none"><i class="fas fa-check-circle"></i> Budgets Saved!</span>
+          <span class="save-confirmation" id="saveConfirmation" style="display:none"><i class="fas fa-check-circle"></i>
+            Budgets Saved!</span>
         </div>
       </div>
     </div>
@@ -566,7 +574,8 @@
         <div class="section-header-row">
           <div>
             <h2>Financial Analytics & YoY Reports</h2>
-            <p class="section-subtitle">Multi-year breakdowns, income vs spending trends, and annual balance reports.</p>
+            <p class="section-subtitle">Multi-year breakdowns, income vs spending trends, and annual balance reports.
+            </p>
           </div>
           <button class="btn-secondary" id="printReportBtn"><i class="fas fa-print"></i> Print / Export Report</button>
         </div>
@@ -824,7 +833,8 @@
       <div class="csv-preview" id="csvPreview" style="display:none">
         <h4>CSV File Loaded</h4>
         <p id="csvFileInfo"></p>
-        <button class="btn-primary full-width" id="processCsvBtn"><i class="fas fa-file-import"></i> Confirm & Import</button>
+        <button class="btn-primary full-width" id="processCsvBtn"><i class="fas fa-file-import"></i> Confirm &
+          Import</button>
       </div>
     </div>
   </div>
@@ -841,7 +851,7 @@
       <form id="profileForm" class="txn-form">
         <div class="form-group">
           <label for="profName">Your Full Name</label>
-          <input type="text" id="profName" placeholder="Asad Ullah" required />
+          <input type="text" id="profName" placeholder="John Doe" required />
         </div>
 
         <div class="form-group">
@@ -862,7 +872,8 @@
         </div>
 
         <button type="submit" class="btn-primary full-width"><i class="fas fa-save"></i> Save Profile Settings</button>
-        <button type="button" class="btn-danger full-width" id="modalLogoutBtn" style="margin-top: 10px"><i class="fas fa-right-from-bracket"></i> Log Out Account</button>
+        <button type="button" class="btn-danger full-width" id="modalLogoutBtn" style="margin-top: 10px"><i
+            class="fas fa-right-from-bracket"></i> Log Out Account</button>
       </form>
     </div>
   </div>
@@ -893,4 +904,5 @@
 
   <script src="app.js?v=2"></script>
 </body>
+
 </html>
