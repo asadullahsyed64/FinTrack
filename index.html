@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="FinTrack — Complete Personal Finance & Wealth Management Suite." />
   <meta name="theme-color" content="#6c63ff" />
+  <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2953/2953361.png" />
   <link rel="manifest" href="manifest.json" />
   <title>FinTrack | Personal Finance Suite</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -15,7 +16,7 @@
     rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="style.css?v=2" />
+  <link rel="stylesheet" href="style.css?v=3" />
 </head>
 
 <body>
@@ -111,6 +112,7 @@
   </div>
 
   <!-- ===== SIDEBAR ===== -->
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <div class="logo">
@@ -251,9 +253,14 @@
         <div class="empty-icon"><i class="fas fa-wallet"></i></div>
         <h2>Welcome to FinTrack!</h2>
         <p>Start logging your income, expenses, and savings goals to unlock your financial insights.</p>
-        <button class="btn-primary" id="emptyAddBtn">
-          <i class="fas fa-plus"></i> Add Your First Transaction
-        </button>
+        <div class="empty-actions">
+          <button class="btn-primary" id="emptyAddBtn">
+            <i class="fas fa-plus"></i> Add Your First Transaction
+          </button>
+          <button class="btn-secondary" id="emptyDemoBtn">
+            <i class="fas fa-wand-magic-sparkles"></i> Load Demo Data
+          </button>
+        </div>
       </div>
 
       <!-- Dashboard Content -->
@@ -758,7 +765,7 @@
   <div class="modal-overlay" id="debtModalOverlay">
     <div class="modal">
       <div class="modal-header">
-        <h2>Add Debt / Loan</h2>
+        <h2 id="debtModalTitle">Add Debt / Loan</h2>
         <button class="modal-close" id="debtModalClose"><i class="fas fa-times"></i></button>
       </div>
       <form id="debtForm" class="txn-form">
@@ -789,7 +796,7 @@
   <div class="modal-overlay" id="billModalOverlay">
     <div class="modal">
       <div class="modal-header">
-        <h2>Add Bill Reminder</h2>
+        <h2 id="billModalTitle">Add Bill Reminder</h2>
         <button class="modal-close" id="billModalClose"><i class="fas fa-times"></i></button>
       </div>
       <form id="billForm" class="txn-form">
@@ -872,6 +879,11 @@
         </div>
 
         <button type="submit" class="btn-primary full-width"><i class="fas fa-save"></i> Save Profile Settings</button>
+        <button type="button" class="btn-secondary full-width" id="profDemoBtn" style="margin-top: 10px"><i
+            class="fas fa-wand-magic-sparkles"></i> Load Sample Demo Data</button>
+        <button type="button" class="btn-secondary full-width" id="profResetBtn"
+          style="margin-top: 10px; color: var(--expense);"><i class="fas fa-rotate-left"></i> Reset Account
+          Data</button>
         <button type="button" class="btn-danger full-width" id="modalLogoutBtn" style="margin-top: 10px"><i
             class="fas fa-right-from-bracket"></i> Log Out Account</button>
       </form>
@@ -902,7 +914,10 @@
     </div>
   </div>
 
-  <script src="app.js?v=2"></script>
+  <!-- ===== FLOATING TOAST NOTIFICATIONS ===== -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js?v=3"></script>
 </body>
 
 </html>

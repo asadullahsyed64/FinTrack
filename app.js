@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ================================================
    FINTRACK — COMPLETE PERSONAL FINANCE SUITE
    17-Feature Full Stack Client-Side Architecture
@@ -44,6 +45,29 @@ function getCatInfo(catId) {
 }
 
 // ================================================
+// TOAST NOTIFICATIONS HELPER
+// ================================================
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+  const icons = {
+    success: 'fa-check-circle',
+    error: 'fa-triangle-exclamation',
+    info: 'fa-circle-info'
+  };
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `<i class="fas ${icons[type] || 'fa-info-circle'}"></i> <span>${message}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    toast.style.transition = 'all 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 3200);
+}
+
+// ================================================
 // 1. AUTHENTICATION & MULTI-USER STATE MANAGEMENT
 // ================================================
 let accounts       = loadRawData('ft_accounts', []);
@@ -66,12 +90,12 @@ function getUserKey(key) {
 function loadUserData(key, fallback) {
   const userKey = getUserKey(key);
   const data = localStorage.getItem(userKey);
-  if (data) {
+  if (data !== null) {
     try { return JSON.parse(data); } catch { return fallback; }
   }
   // Migration check for single-user legacy data
   const oldData = localStorage.getItem(key);
-  if (oldData) {
+  if (oldData !== null) {
     try {
       const parsed = JSON.parse(oldData);
       saveUserData(key, parsed);
@@ -115,7 +139,15 @@ function reloadCurrentUserData() {
 
   document.documentElement.setAttribute('data-accent', currentAccent);
   if (currencySelect) currencySelect.value = currentCurrency;
+  const prefixEl = document.getElementById('formCurrencyPrefix');
+  if (prefixEl) prefixEl.textContent = (CURRENCIES[currentCurrency] || CURRENCIES.INR).symbol;
+
+  document.querySelectorAll('.color-dot').forEach(d => {
+    d.classList.toggle('active', d.getAttribute('data-accent') === currentAccent);
+  });
+
   updateUserProfileUI();
+  populateBillCategories();
 }
 
 // ================================================
@@ -131,14 +163,21 @@ if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.p
 // 3. CURRENCY & FORMATTING ENGINE
 // ================================================
 const currencySelect = document.getElementById('currencySelect');
-currencySelect.value = currentCurrency;
 
 currencySelect.addEventListener('change', (e) => {
   currentCurrency = e.target.value;
-  localStorage.setItem('ft_currency', currentCurrency);
-  document.getElementById('formCurrencyPrefix').textContent = CURRENCIES[currentCurrency].symbol;
+  saveUserData('ft_currency', currentCurrency);
+  const prefixEl = document.getElementById('formCurrencyPrefix');
+  if (prefixEl) prefixEl.textContent = (CURRENCIES[currentCurrency] || CURRENCIES.INR).symbol;
+  
   refreshDashboard();
   if (currentPage === 'transactions') renderTxnTable();
+  if (currentPage === 'budget')       renderBudgetEditor();
+  if (currentPage === 'savings')      renderSavingsGoals();
+  if (currentPage === 'debts')        renderDebts();
+  if (currentPage === 'bills')        renderBills();
+  if (currentPage === 'calendar')     renderCalendar();
+  if (currentPage === 'reports')      renderReports();
 });
 
 function fmt(n) {
@@ -148,15 +187,19 @@ function fmt(n) {
 
 function fmtDate(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const parts = String(dateStr).split('-');
+  const curr = CURRENCIES[currentCurrency] || CURRENCIES.INR;
+  if (parts.length === 3) {
+    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    return d.toLocaleDateString(curr.locale, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  return dateStr;
 }
 
 // ================================================
 // 4. ACCENT THEMES & COLOR PICKER
 // ================================================
 const html = document.documentElement;
-html.setAttribute('data-accent', currentAccent);
 
 const colorPickerBtn = document.getElementById('colorPickerBtn');
 const colorMenu      = document.getElementById('colorMenu');
@@ -169,15 +212,12 @@ colorPickerBtn.addEventListener('click', (e) => {
 document.addEventListener('click', () => colorMenu.classList.remove('open'));
 
 document.querySelectorAll('.color-dot').forEach(dot => {
-  if (dot.getAttribute('data-accent') === currentAccent) {
-    dot.classList.add('active');
-  }
   dot.addEventListener('click', () => {
     document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
     dot.classList.add('active');
     currentAccent = dot.getAttribute('data-accent');
     html.setAttribute('data-accent', currentAccent);
-    localStorage.setItem('ft_accent', currentAccent);
+    saveUserData('ft_accent', currentAccent);
     updateChartThemes();
   });
 });
@@ -197,12 +237,13 @@ themeToggle.addEventListener('click', () => {
   themeIcon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
   localStorage.setItem('ft_theme', next);
   updateChartThemes();
+  if (currentPage === 'reports') renderReports();
 });
 
 function getThemeColors() {
   const dark = html.getAttribute('data-theme') === 'dark';
   return {
-    grid: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)',
+    grid: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
     text: dark ? '#94a3b8' : '#64748b',
     bg:   dark ? '#131626' : '#ffffff',
   };
@@ -229,7 +270,7 @@ function checkPinOnLaunch() {
 
 lockAppBtn.addEventListener('click', () => {
   if (!userProfile.pinEnabled || !userProfile.pin) {
-    alert('Please enable PIN lock in User Profile settings first!');
+    showToast('Enable PIN lock in User Profile settings first', 'info');
     openProfileModal();
     return;
   }
@@ -245,26 +286,47 @@ function updatePinDots() {
   });
 }
 
-document.querySelectorAll('.key-btn[data-key]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    if (pinBuffer.length < 4) {
-      pinBuffer += btn.getAttribute('data-key');
-      updatePinDots();
-      if (pinBuffer.length === 4) verifyPin();
-    }
-  });
-});
+function handlePinDigit(digit) {
+  if (pinBuffer.length < 4) {
+    pinBuffer += digit;
+    updatePinDots();
+    if (pinBuffer.length === 4) verifyPin();
+  }
+}
 
-document.getElementById('pinClear').addEventListener('click', () => {
-  pinBuffer = '';
-  pinError.textContent = '';
-  updatePinDots();
-});
-
-document.getElementById('pinBackspace').addEventListener('click', () => {
+function handlePinBackspace() {
   pinBuffer = pinBuffer.slice(0, -1);
   pinError.textContent = '';
   updatePinDots();
+}
+
+function handlePinClear() {
+  pinBuffer = '';
+  pinError.textContent = '';
+  updatePinDots();
+}
+
+document.querySelectorAll('.key-btn[data-key]').forEach(btn => {
+  btn.addEventListener('click', () => handlePinDigit(btn.getAttribute('data-key')));
+});
+
+document.getElementById('pinClear').addEventListener('click', handlePinClear);
+document.getElementById('pinBackspace').addEventListener('click', handlePinBackspace);
+
+// Physical keyboard listener for PIN pad
+window.addEventListener('keydown', (e) => {
+  if (pinScreen && pinScreen.style.display !== 'none') {
+    if (e.key >= '0' && e.key <= '9') {
+      e.preventDefault();
+      handlePinDigit(e.key);
+    } else if (e.key === 'Backspace') {
+      e.preventDefault();
+      handlePinBackspace();
+    } else if (e.key === 'Escape' || e.key.toLowerCase() === 'c') {
+      e.preventDefault();
+      handlePinClear();
+    }
+  }
 });
 
 function verifyPin() {
@@ -338,19 +400,70 @@ profileForm.addEventListener('submit', (e) => {
   saveData('ft_user', userProfile);
   updateUserProfileUI();
   profileModalOverlay.classList.remove('open');
+  showToast('Profile & security preferences saved!', 'success');
   refreshDashboard();
 });
+
+// Demo Data & Reset Data Buttons in Settings
+const profDemoBtn = document.getElementById('profDemoBtn');
+if (profDemoBtn) {
+  profDemoBtn.addEventListener('click', () => {
+    loadDemoData();
+    profileModalOverlay.classList.remove('open');
+  });
+}
+
+const profResetBtn = document.getElementById('profResetBtn');
+if (profResetBtn) {
+  profResetBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to erase all data for this account? This cannot be undone.')) {
+      transactions = [];
+      budgets = { housing: 15000, food: 10000, transport: 5000, shopping: 5000 };
+      goals = [];
+      debts = [];
+      bills = [];
+      saveData('ft_transactions', transactions);
+      saveData('ft_budgets', budgets);
+      saveData('ft_goals', goals);
+      saveData('ft_debts', debts);
+      saveData('ft_bills', bills);
+      profileModalOverlay.classList.remove('open');
+      showToast('All data has been reset.', 'info');
+      refreshDashboard();
+      if (currentPage === 'transactions') renderTxnTable();
+      if (currentPage === 'budget')       renderBudgetEditor();
+      if (currentPage === 'savings')      renderSavingsGoals();
+      if (currentPage === 'debts')        renderDebts();
+      if (currentPage === 'bills')        renderBills();
+      if (currentPage === 'calendar')     renderCalendar();
+      if (currentPage === 'reports')      renderReports();
+    }
+  });
+}
 
 // ================================================
 // 7. SIDEBAR & PAGE NAVIGATION
 // ================================================
-const sidebar       = document.getElementById('sidebar');
-const sidebarToggle = document.getElementById('sidebarToggle');
+const sidebar          = document.getElementById('sidebar');
+const sidebarToggle    = document.getElementById('sidebarToggle');
+const sidebarBackdrop  = document.getElementById('sidebarBackdrop');
 
 sidebarToggle.addEventListener('click', () => {
-  sidebar.classList.toggle('collapsed');
+  if (window.innerWidth <= 768) {
+    sidebar.classList.toggle('mobile-open');
+    if (sidebarBackdrop) sidebarBackdrop.classList.toggle('active');
+  } else {
+    sidebar.classList.toggle('collapsed');
+  }
   setTimeout(() => { Object.values(charts).forEach(c => c && c.resize && c.resize()); }, 320);
 });
+
+if (sidebarBackdrop) {
+  sidebarBackdrop.addEventListener('click', () => {
+    sidebar.classList.remove('mobile-open');
+    sidebarBackdrop.classList.remove('active');
+  });
+}
 
 const PAGES = {
   dashboard:    document.getElementById('pageDashboard'),
@@ -387,6 +500,12 @@ function navigateTo(page) {
 
   document.getElementById('pageTitle').textContent = PAGE_TITLES[page] || 'FinTrack';
 
+  // Close mobile drawer on navigation
+  if (sidebar.classList.contains('mobile-open')) {
+    sidebar.classList.remove('mobile-open');
+    if (sidebarBackdrop) sidebarBackdrop.classList.remove('active');
+  }
+
   if (page === 'dashboard')    refreshDashboard();
   if (page === 'transactions') renderTransactionsPage();
   if (page === 'budget')       renderBudgetEditor();
@@ -418,8 +537,8 @@ document.getElementById('budgetMonth').textContent = now.toLocaleDateString('en-
 });
 
 function getMonthStr(date) {
-  const d = new Date(date);
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  if (!date) return '';
+  return String(date).slice(0, 7);
 }
 
 function thisMonthStr() {
@@ -461,11 +580,18 @@ function getCategoryBreakdown(monthStr) {
 }
 
 function getRunningBalance(txns) {
-  const sorted = [...txns].sort((a,b) => new Date(a.date) - new Date(b.date));
+  if (!txns || txns.length === 0) return [];
+  // Sort chronologically
+  const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
+  const dailyDeltas = {};
+  sorted.forEach(t => {
+    dailyDeltas[t.date] = (dailyDeltas[t.date] || 0) + (t.type === 'income' ? Number(t.amount) : -Number(t.amount));
+  });
+
   let balance = 0;
-  return sorted.map(t => {
-    balance += t.type === 'income' ? Number(t.amount) : -Number(t.amount);
-    return { date: t.date, balance };
+  return Object.keys(dailyDeltas).sort().map(date => {
+    balance += dailyDeltas[date];
+    return { date, balance };
   });
 }
 
@@ -582,14 +708,34 @@ function renderSmartInsights() {
 }
 
 // ================================================
-// 11. DASHBOARD REFRESH
+// 11. DASHBOARD REFRESH & RANGE FILTER
 // ================================================
 let filterMode = '6m';
+
+const filterChips = [
+  { id: 'filter6m', mode: '6m' },
+  { id: 'filter3m', mode: '3m' },
+  { id: 'filter1m', mode: '1m' },
+];
+
+filterChips.forEach(({ id, mode }) => {
+  const btn = document.getElementById(id);
+  if (btn) {
+    btn.addEventListener('click', () => {
+      filterMode = mode;
+      filterChips.forEach(c => {
+        const el = document.getElementById(c.id);
+        if (el) el.classList.toggle('active', c.mode === mode);
+      });
+      refreshDashboard();
+    });
+  }
+});
 
 function refreshDashboard() {
   const hasData = transactions.length > 0;
   document.getElementById('emptyState').style.display       = hasData ? 'none'  : 'flex';
-  document.getElementById('dashboardContent').style.display    = hasData ? 'block' : 'none';
+  document.getElementById('dashboardContent').style.display = hasData ? 'block' : 'none';
 
   if (!hasData) return;
 
@@ -619,9 +765,10 @@ function refreshDashboard() {
   sparkIncome.data.datasets[0].data  = last6.map(m => m.income);
   sparkExpense.data.datasets[0].data = last6.map(m => m.expense);
   sparkSavings.data.datasets[0].data = last6.map(m => m.income - m.expense);
-  [sparkIncome, sparkExpense, sparkSavings].forEach(s => s.update());
+  sparkBalance.data.datasets[0].data = getRunningBalance(transactions).slice(-6).map(p => p.balance);
+  [sparkIncome, sparkExpense, sparkSavings, sparkBalance].forEach(s => s.update());
 
-  // Bar Chart
+  // Bar Chart with active filter
   const n = filterMode === '6m' ? 6 : filterMode === '3m' ? 3 : 1;
   const monthsData = getLastNMonthsData(n);
   barChart.data.labels           = monthsData.map(m => m.label);
@@ -644,6 +791,12 @@ function refreshDashboard() {
       item.innerHTML = `<div class="legend-dot" style="background:${cat.color}"></div><span>${cat.label}: <strong>${fmt(cat.value)}</strong></span>`;
       legendEl.appendChild(item);
     });
+  } else {
+    donutChart.data.labels = ['No Expenses'];
+    donutChart.data.datasets[0].data = [1];
+    donutChart.data.datasets[0].backgroundColor = ['rgba(255,255,255,0.08)'];
+    donutChart.update();
+    legendEl.innerHTML = '<span style="color:var(--text-muted);font-size:12px">No expenses logged for this month</span>';
   }
 
   // Line Chart
@@ -668,7 +821,7 @@ function renderRecentTransactions() {
   const noMsg  = document.getElementById('noTxnMsg');
   listEl.innerHTML = '';
 
-  const recent = [...transactions].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+  const recent = [...transactions].sort((a,b) => b.date.localeCompare(a.date)).slice(0, 5);
   if (recent.length === 0) { noMsg.style.display = 'flex'; return; }
   noMsg.style.display = 'none';
 
@@ -679,7 +832,7 @@ function renderRecentTransactions() {
     div.innerHTML = `
       <div class="txn-icon" style="background:${cat.color}22; color:${cat.color}"><i class="${cat.icon}"></i></div>
       <div class="txn-details">
-        <div class="txn-name">${txn.description}</div>
+        <div class="txn-name">${txn.description} ${txn.recurring ? '<span class="tag-badge" style="font-size:10px"><i class="fas fa-arrows-rotate"></i> Recurring</span>' : ''}</div>
         <div class="txn-date">${fmtDate(txn.date)} · ${cat.label}</div>
       </div>
       <div class="txn-amount ${txn.type === 'income' ? 'credit' : 'debit'}">
@@ -741,7 +894,7 @@ function renderDashBillsWidget() {
 }
 
 // ================================================
-// 12. TRANSACTIONS PAGE & EDIT SYSTEM
+// 12. TRANSACTIONS PAGE & SEARCH SYSTEM
 // ================================================
 const txnSearchInput     = document.getElementById('txnSearchInput');
 const clearSearchBtn     = document.getElementById('clearSearchBtn');
@@ -825,7 +978,7 @@ function renderTxnTable() {
   if (start)             filtered = filtered.filter(t => t.date >= start);
   if (end)               filtered = filtered.filter(t => t.date <= end);
 
-  filtered.sort((a,b) => new Date(b.date) - new Date(a.date));
+  filtered.sort((a,b) => b.date.localeCompare(a.date));
 
   const inc = filtered.filter(t => t.type === 'income').reduce((s,t) => s + Number(t.amount), 0);
   const exp = filtered.filter(t => t.type === 'expense').reduce((s,t) => s + Number(t.amount), 0);
@@ -852,7 +1005,7 @@ function renderTxnTable() {
     tr.innerHTML = `
       <td>${fmtDate(txn.date)}</td>
       <td>
-        <div style="font-weight:600">${txn.description}</div>
+        <div style="font-weight:600">${txn.description} ${txn.recurring ? '<span class="tag-badge" style="font-size:10px"><i class="fas fa-arrows-rotate"></i> ' + (txn.recurringFreq || 'Recurring') + '</span>' : ''}</div>
         ${txn.notes ? `<div class="notes-text">${txn.notes}</div>` : ''}
       </td>
       <td><span class="txn-cat-badge"><i class="${cat.icon}" style="color:${cat.color}"></i> ${cat.label}</span></td>
@@ -881,19 +1034,47 @@ function renderTxnTable() {
 // ================================================
 // 13. ADD / EDIT TRANSACTION MODAL
 // ================================================
-const modalOverlay = document.getElementById('modalOverlay');
-const modalClose   = document.getElementById('modalClose');
-const fabBtn       = document.getElementById('fabBtn');
-const txnForm      = document.getElementById('txnForm');
-const typeButtons  = document.querySelectorAll('.type-btn');
-const catSelect    = document.getElementById('txnCategory');
-let selectedType   = 'income';
+const modalOverlay       = document.getElementById('modalOverlay');
+const modalClose         = document.getElementById('modalClose');
+const fabBtn             = document.getElementById('fabBtn');
+const txnForm            = document.getElementById('txnForm');
+const typeButtons        = document.querySelectorAll('.type-btn');
+const catSelect          = document.getElementById('txnCategory');
+const txnRecurringCheck  = document.getElementById('txnRecurringCheck');
+const recurringFreqWrap  = document.getElementById('recurringFreqWrap');
+const txnRecurringFreq   = document.getElementById('txnRecurringFreq');
+
+let selectedType = 'income';
+
+if (txnRecurringCheck) {
+  txnRecurringCheck.addEventListener('change', (e) => {
+    if (recurringFreqWrap) recurringFreqWrap.style.display = e.target.checked ? 'block' : 'none';
+  });
+}
+
+function clearTxnErrors() {
+  ['amountError', 'categoryError', 'descError'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = '';
+      el.classList.remove('show');
+    }
+  });
+}
+
+['txnAmount', 'txnCategory', 'txnDesc'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', clearTxnErrors);
+});
 
 function openModal(editId = null) {
   txnForm.reset();
+  clearTxnErrors();
   document.getElementById('editTxnId').value = editId || '';
   document.getElementById('modalTitle').textContent = editId ? 'Edit Transaction' : 'Add Transaction';
   document.getElementById('txnDate').valueAsDate = new Date();
+  
+  if (recurringFreqWrap) recurringFreqWrap.style.display = 'none';
 
   if (editId) {
     const t = transactions.find(item => item.id === editId);
@@ -907,6 +1088,13 @@ function openModal(editId = null) {
       document.getElementById('txnTag').value      = t.tag || '';
       document.getElementById('txnDate').value     = t.date;
       document.getElementById('txnNotes').value    = t.notes || '';
+      if (txnRecurringCheck) {
+        txnRecurringCheck.checked = !!t.recurring;
+        if (recurringFreqWrap) recurringFreqWrap.style.display = t.recurring ? 'block' : 'none';
+      }
+      if (txnRecurringFreq && t.recurringFreq) {
+        txnRecurringFreq.value = t.recurringFreq;
+      }
     }
   } else {
     selectedType = 'income';
@@ -927,6 +1115,7 @@ function setTypeToggle(type) {
 function closeModal() {
   modalOverlay.classList.remove('open');
   txnForm.reset();
+  clearTxnErrors();
 }
 
 fabBtn.addEventListener('click', () => openModal());
@@ -953,26 +1142,69 @@ function populateCategoryDropdown(type) {
 
 txnForm.addEventListener('submit', (e) => {
   e.preventDefault();
-  const editId = document.getElementById('editTxnId').value;
-  const amount = parseFloat(document.getElementById('txnAmount').value);
-  const catId  = document.getElementById('txnCategory').value;
-  const desc   = document.getElementById('txnDesc').value.trim();
-  const date   = document.getElementById('txnDate').value;
-  const tag    = document.getElementById('txnTag').value.trim();
-  const notes  = document.getElementById('txnNotes').value.trim();
+  const editId   = document.getElementById('editTxnId').value;
+  const amount   = parseFloat(document.getElementById('txnAmount').value);
+  const catId    = document.getElementById('txnCategory').value;
+  const desc     = document.getElementById('txnDesc').value.trim();
+  const date     = document.getElementById('txnDate').value;
+  const tag      = document.getElementById('txnTag').value.trim();
+  const notes    = document.getElementById('txnNotes').value.trim();
+  const isRec    = txnRecurringCheck ? txnRecurringCheck.checked : false;
+  const recFreq  = isRec && txnRecurringFreq ? txnRecurringFreq.value : null;
 
-  if (!amount || !catId || !desc || !date) return;
+  let hasError = false;
+  if (!amount || isNaN(amount) || amount <= 0) {
+    const err = document.getElementById('amountError');
+    err.textContent = 'Please enter a valid amount greater than 0.';
+    err.classList.add('show');
+    hasError = true;
+  }
+  if (!catId) {
+    const err = document.getElementById('categoryError');
+    err.textContent = 'Please choose a category.';
+    err.classList.add('show');
+    hasError = true;
+  }
+  if (!desc) {
+    const err = document.getElementById('descError');
+    err.textContent = 'Please enter a description.';
+    err.classList.add('show');
+    hasError = true;
+  }
+
+  if (hasError || !date) return;
 
   if (editId) {
     const idx = transactions.findIndex(t => t.id === editId);
     if (idx !== -1) {
-      transactions[idx] = { ...transactions[idx], type: selectedType, amount, category: catId, description: desc, date, tag, notes };
+      transactions[idx] = { 
+        ...transactions[idx], 
+        type: selectedType, 
+        amount, 
+        category: catId, 
+        description: desc, 
+        date, 
+        tag, 
+        notes,
+        recurring: isRec,
+        recurringFreq: recFreq
+      };
+      showToast('Transaction updated successfully!', 'success');
     }
   } else {
     transactions.push({
       id: Date.now().toString(),
-      type: selectedType, amount, category: catId, description: desc, date, tag, notes
+      type: selectedType, 
+      amount, 
+      category: catId, 
+      description: desc, 
+      date, 
+      tag, 
+      notes,
+      recurring: isRec,
+      recurringFreq: recFreq
     });
+    showToast('Transaction added!', 'success');
   }
 
   saveData('ft_transactions', transactions);
@@ -989,6 +1221,7 @@ function deleteTransaction(id) {
   if (!confirm('Delete this transaction?')) return;
   transactions = transactions.filter(t => t.id !== id);
   saveData('ft_transactions', transactions);
+  showToast('Transaction deleted.', 'info');
   refreshDashboard();
   if (currentPage === 'transactions') renderTxnTable();
 }
@@ -996,9 +1229,39 @@ function deleteTransaction(id) {
 // ================================================
 // 14. SAVINGS GOALS HUB
 // ================================================
+const goalModalOverlay = document.getElementById('goalModalOverlay');
+
+function openGoalModal(goalId = null) {
+  const form = document.getElementById('goalForm');
+  form.reset();
+  document.getElementById('editGoalId').value = goalId || '';
+  document.getElementById('goalModalTitle').textContent = goalId ? 'Edit Savings Goal' : 'Add Savings Goal';
+
+  if (goalId) {
+    const g = goals.find(item => item.id === goalId);
+    if (g) {
+      document.getElementById('goalTitle').value      = g.title;
+      document.getElementById('goalTarget').value     = g.target;
+      document.getElementById('goalCurrent').value    = g.current || 0;
+      document.getElementById('goalTargetDate').value = g.targetDate || '';
+    }
+  }
+  goalModalOverlay.classList.add('open');
+}
+
 function renderSavingsGoals() {
   const grid = document.getElementById('goalsGrid');
   grid.innerHTML = '';
+
+  if (goals.length === 0) {
+    grid.innerHTML = `
+      <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
+        <i class="fas fa-piggy-bank" style="font-size: 36px; margin-bottom: 12px; opacity: 0.5;"></i>
+        <p>No savings goals created yet. Click "+ New Savings Goal" to set one!</p>
+      </div>
+    `;
+    return;
+  }
 
   goals.forEach(goal => {
     const pct = Math.min(Math.round((goal.current / goal.target) * 100), 100);
@@ -1019,7 +1282,8 @@ function renderSavingsGoals() {
       <div style="font-size:12px; color:var(--text-muted)">Target: ${fmt(goal.target)}</div>
       <div class="goal-actions">
         <button class="goal-deposit-btn" data-id="${goal.id}">+ Deposit / - Withdraw</button>
-        <button class="goal-delete-btn" data-id="${goal.id}"><i class="fas fa-trash-alt"></i></button>
+        <button class="goal-edit-btn" data-id="${goal.id}" title="Edit Goal"><i class="fas fa-pen"></i></button>
+        <button class="goal-delete-btn" data-id="${goal.id}" title="Delete Goal"><i class="fas fa-trash-alt"></i></button>
       </div>
     `;
     grid.appendChild(card);
@@ -1029,29 +1293,45 @@ function renderSavingsGoals() {
     b.addEventListener('click', () => openDepositModal(b.getAttribute('data-id')));
   });
 
+  grid.querySelectorAll('.goal-edit-btn').forEach(b => {
+    b.addEventListener('click', () => openGoalModal(b.getAttribute('data-id')));
+  });
+
   grid.querySelectorAll('.goal-delete-btn').forEach(b => {
     b.addEventListener('click', () => {
       if (!confirm('Delete this savings goal?')) return;
       goals = goals.filter(g => g.id !== b.getAttribute('data-id'));
       saveData('ft_goals', goals);
+      showToast('Savings goal removed', 'info');
       renderSavingsGoals();
     });
   });
 }
 
-const goalModalOverlay = document.getElementById('goalModalOverlay');
-document.getElementById('addGoalBtn').addEventListener('click', () => goalModalOverlay.classList.add('open'));
+document.getElementById('addGoalBtn').addEventListener('click', () => openGoalModal());
 document.getElementById('goalModalClose').addEventListener('click', () => goalModalOverlay.classList.remove('open'));
 
 document.getElementById('goalForm').addEventListener('submit', (e) => {
   e.preventDefault();
-  const title = document.getElementById('goalTitle').value.trim();
-  const target = parseFloat(document.getElementById('goalTarget').value);
-  const current = parseFloat(document.getElementById('goalCurrent').value) || 0;
+  const editId     = document.getElementById('editGoalId').value;
+  const title      = document.getElementById('goalTitle').value.trim();
+  const target     = parseFloat(document.getElementById('goalTarget').value);
+  const current    = parseFloat(document.getElementById('goalCurrent').value) || 0;
   const targetDate = document.getElementById('goalTargetDate').value;
 
   if (!title || !target) return;
-  goals.push({ id: Date.now().toString(), title, target, current, targetDate });
+
+  if (editId) {
+    const idx = goals.findIndex(g => g.id === editId);
+    if (idx !== -1) {
+      goals[idx] = { ...goals[idx], title, target, current, targetDate };
+      showToast('Savings goal updated!', 'success');
+    }
+  } else {
+    goals.push({ id: Date.now().toString(), title, target, current, targetDate });
+    showToast('New savings goal created!', 'success');
+  }
+
   saveData('ft_goals', goals);
   goalModalOverlay.classList.remove('open');
   document.getElementById('goalForm').reset();
@@ -1061,6 +1341,7 @@ document.getElementById('goalForm').addEventListener('submit', (e) => {
 const depositModalOverlay = document.getElementById('depositModalOverlay');
 function openDepositModal(id) {
   document.getElementById('depositGoalId').value = id;
+  document.getElementById('depositAmount').value = '';
   depositModalOverlay.classList.add('open');
 }
 document.getElementById('depositModalClose').addEventListener('click', () => depositModalOverlay.classList.remove('open'));
@@ -1073,8 +1354,13 @@ document.getElementById('depositForm').addEventListener('submit', (e) => {
 
   const g = goals.find(item => item.id === id);
   if (g && amount > 0) {
-    if (action === 'deposit') g.current += amount;
-    else g.current = Math.max(0, g.current - amount);
+    if (action === 'deposit') {
+      g.current += amount;
+      showToast(`Deposited ${fmt(amount)} into "${g.title}"!`, 'success');
+    } else {
+      g.current = Math.max(0, g.current - amount);
+      showToast(`Withdrew ${fmt(amount)} from "${g.title}"!`, 'info');
+    }
     saveData('ft_goals', goals);
     renderSavingsGoals();
   }
@@ -1084,9 +1370,39 @@ document.getElementById('depositForm').addEventListener('submit', (e) => {
 // ================================================
 // 15. DEBT & EMI TRACKER
 // ================================================
+const debtModalOverlay = document.getElementById('debtModalOverlay');
+
+function openDebtModal(debtId = null) {
+  const form = document.getElementById('debtForm');
+  form.reset();
+  document.getElementById('editDebtId').value = debtId || '';
+  document.getElementById('debtModalTitle').textContent = debtId ? 'Edit Debt / Loan' : 'Add Debt / Loan';
+
+  if (debtId) {
+    const d = debts.find(item => item.id === debtId);
+    if (d) {
+      document.getElementById('debtTitle').value    = d.title;
+      document.getElementById('debtTotal').value    = d.total;
+      document.getElementById('debtPaid').value     = d.paid || 0;
+      document.getElementById('debtInterest').value = d.interest || '';
+    }
+  }
+  debtModalOverlay.classList.add('open');
+}
+
 function renderDebts() {
   const grid = document.getElementById('debtsGrid');
   grid.innerHTML = '';
+
+  if (debts.length === 0) {
+    grid.innerHTML = `
+      <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
+        <i class="fas fa-hand-holding-dollar" style="font-size: 36px; margin-bottom: 12px; opacity: 0.5;"></i>
+        <p>No active debts or loans logged. Click "+ Add New Debt/Loan" to track one.</p>
+      </div>
+    `;
+    return;
+  }
 
   debts.forEach(debt => {
     const rem = Math.max(0, debt.total - debt.paid);
@@ -1104,7 +1420,8 @@ function renderDebts() {
       <div class="goal-bar-bg" style="height:8px"><div class="goal-bar-fill" style="width:${pct}%; background:var(--expense)"></div></div>
       <div class="goal-actions">
         <button class="pay-debt-btn" data-id="${debt.id}">+ Log Payment</button>
-        <button class="delete-debt-btn" data-id="${debt.id}"><i class="fas fa-trash-alt"></i></button>
+        <button class="edit-debt-btn" data-id="${debt.id}" title="Edit Debt"><i class="fas fa-pen"></i></button>
+        <button class="delete-debt-btn" data-id="${debt.id}" title="Delete Debt"><i class="fas fa-trash-alt"></i></button>
       </div>
     `;
     grid.appendChild(card);
@@ -1112,16 +1429,22 @@ function renderDebts() {
 
   grid.querySelectorAll('.pay-debt-btn').forEach(b => {
     b.addEventListener('click', () => {
-      const amt = prompt('Enter payment amount:');
-      if (amt && !isNaN(amt)) {
+      const amtStr = prompt('Enter payment amount:');
+      const amt = parseFloat(amtStr);
+      if (amt && !isNaN(amt) && amt > 0) {
         const d = debts.find(item => item.id === b.getAttribute('data-id'));
         if (d) {
-          d.paid += parseFloat(amt);
+          d.paid = Math.min(d.total, d.paid + amt);
           saveData('ft_debts', debts);
+          showToast(`Logged payment of ${fmt(amt)} for "${d.title}"`, 'success');
           renderDebts();
         }
       }
     });
+  });
+
+  grid.querySelectorAll('.edit-debt-btn').forEach(b => {
+    b.addEventListener('click', () => openDebtModal(b.getAttribute('data-id')));
   });
 
   grid.querySelectorAll('.delete-debt-btn').forEach(b => {
@@ -1129,24 +1452,36 @@ function renderDebts() {
       if (!confirm('Delete this debt entry?')) return;
       debts = debts.filter(d => d.id !== b.getAttribute('data-id'));
       saveData('ft_debts', debts);
+      showToast('Debt entry deleted', 'info');
       renderDebts();
     });
   });
 }
 
-const debtModalOverlay = document.getElementById('debtModalOverlay');
-document.getElementById('addDebtBtn').addEventListener('click', () => debtModalOverlay.classList.add('open'));
+document.getElementById('addDebtBtn').addEventListener('click', () => openDebtModal());
 document.getElementById('debtModalClose').addEventListener('click', () => debtModalOverlay.classList.remove('open'));
 
 document.getElementById('debtForm').addEventListener('submit', (e) => {
   e.preventDefault();
+  const editId   = document.getElementById('editDebtId').value;
   const title    = document.getElementById('debtTitle').value.trim();
   const total    = parseFloat(document.getElementById('debtTotal').value);
   const paid     = parseFloat(document.getElementById('debtPaid').value) || 0;
   const interest = parseFloat(document.getElementById('debtInterest').value) || 0;
 
   if (!title || !total) return;
-  debts.push({ id: Date.now().toString(), title, total, paid, interest });
+
+  if (editId) {
+    const idx = debts.findIndex(d => d.id === editId);
+    if (idx !== -1) {
+      debts[idx] = { ...debts[idx], title, total, paid, interest };
+      showToast('Debt details updated!', 'success');
+    }
+  } else {
+    debts.push({ id: Date.now().toString(), title, total, paid, interest });
+    showToast('New debt record added!', 'success');
+  }
+
   saveData('ft_debts', debts);
   debtModalOverlay.classList.remove('open');
   document.getElementById('debtForm').reset();
@@ -1156,27 +1491,74 @@ document.getElementById('debtForm').addEventListener('submit', (e) => {
 // ================================================
 // 16. BILL REMINDERS & RECURRING PAYMENTS
 // ================================================
+const billModalOverlay = document.getElementById('billModalOverlay');
+const billCatSelect    = document.getElementById('billCategory');
+
+function populateBillCategories() {
+  if (!billCatSelect) return;
+  billCatSelect.innerHTML = '';
+  EXPENSE_CATEGORIES.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.label;
+    billCatSelect.appendChild(opt);
+  });
+}
+
+function openBillModal(billId = null) {
+  const form = document.getElementById('billForm');
+  form.reset();
+  populateBillCategories();
+  document.getElementById('editBillId').value = billId || '';
+  document.getElementById('billModalTitle').textContent = billId ? 'Edit Bill Reminder' : 'Add Bill Reminder';
+
+  if (billId) {
+    const b = bills.find(item => item.id === billId);
+    if (b) {
+      document.getElementById('billTitle').value   = b.title;
+      document.getElementById('billAmount').value  = b.amount;
+      document.getElementById('billDueDate').value = b.dueDate;
+      if (b.category) document.getElementById('billCategory').value = b.category;
+    }
+  }
+  billModalOverlay.classList.add('open');
+}
+
 function renderBills() {
   const wrap = document.getElementById('billsListWrap');
   wrap.innerHTML = '';
 
+  if (bills.length === 0) {
+    wrap.innerHTML = `
+      <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+        <i class="fas fa-file-invoice-dollar" style="font-size: 36px; margin-bottom: 12px; opacity: 0.5;"></i>
+        <p>No upcoming bills registered. Click "+ Add Bill Reminder" to stay ahead of dues.</p>
+      </div>
+    `;
+    return;
+  }
+
   bills.forEach(bill => {
-    const isOverdue = !bill.paid && new Date(bill.dueDate) < new Date();
+    const today = new Date().toISOString().split('T')[0];
+    const isOverdue = !bill.paid && bill.dueDate < today;
+    const cat = getCatInfo(bill.category || 'utilities');
+
     const item = document.createElement('div');
     item.className = 'bill-item';
     item.innerHTML = `
       <div class="bill-info">
-        <div class="bill-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+        <div class="bill-icon" style="background:${cat.color}22; color:${cat.color}"><i class="${cat.icon}"></i></div>
         <div>
           <div class="bill-name">${bill.title}</div>
-          <div class="bill-date">Due: ${fmtDate(bill.dueDate)}</div>
+          <div class="bill-date">Due: ${fmtDate(bill.dueDate)} · <span style="color:var(--text-muted)">${cat.label}</span></div>
         </div>
       </div>
-      <div style="display:flex; align-items:center; gap:16px">
+      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap">
         <div style="font-size:16px; font-weight:700">${fmt(bill.amount)}</div>
         <span class="bill-status ${bill.paid ? 'paid' : isOverdue ? 'overdue' : 'due-soon'}">${bill.paid ? 'Paid' : isOverdue ? 'Overdue' : 'Due Soon'}</span>
-        ${!bill.paid ? `<button class="btn-sm pay-bill-btn" data-id="${bill.id}">Mark Paid</button>` : ''}
-        <button class="action-icon-btn delete-bill-btn" data-id="${bill.id}"><i class="fas fa-trash-alt"></i></button>
+        ${!bill.paid ? `<button class="btn-sm pay-bill-btn" data-id="${bill.id}">Mark Paid</button>` : `<button class="btn-sm unpay-bill-btn" data-id="${bill.id}" style="background:transparent">Unmark</button>`}
+        <button class="action-icon-btn edit-bill-btn" data-id="${bill.id}" title="Edit"><i class="fas fa-pen"></i></button>
+        <button class="action-icon-btn delete-bill-btn" data-id="${bill.id}" title="Delete"><i class="fas fa-trash-alt"></i></button>
       </div>
     `;
     wrap.appendChild(item);
@@ -1188,39 +1570,76 @@ function renderBills() {
       if (bill) {
         bill.paid = true;
         saveData('ft_bills', bills);
-        // Auto Log Expense Transaction
+        // Auto Log Expense Transaction with correct category
         transactions.push({
           id: Date.now().toString(),
-          type: 'expense', amount: bill.amount, category: 'utilities', description: `Bill: ${bill.title}`, date: new Date().toISOString().split('T')[0]
+          type: 'expense', 
+          amount: bill.amount, 
+          category: bill.category || 'utilities', 
+          description: `Bill Paid: ${bill.title}`, 
+          date: new Date().toISOString().split('T')[0],
+          notes: `Auto-recorded from bill due on ${bill.dueDate}`
         });
         saveData('ft_transactions', transactions);
+        showToast(`Bill "${bill.title}" marked as paid & logged in transactions!`, 'success');
         renderBills();
         refreshDashboard();
       }
     });
   });
 
+  wrap.querySelectorAll('.unpay-bill-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      const bill = bills.find(item => item.id === b.getAttribute('data-id'));
+      if (bill) {
+        bill.paid = false;
+        saveData('ft_bills', bills);
+        showToast(`Bill "${bill.title}" marked as unpaid`, 'info');
+        renderBills();
+        refreshDashboard();
+      }
+    });
+  });
+
+  wrap.querySelectorAll('.edit-bill-btn').forEach(b => {
+    b.addEventListener('click', () => openBillModal(b.getAttribute('data-id')));
+  });
+
   wrap.querySelectorAll('.delete-bill-btn').forEach(b => {
     b.addEventListener('click', () => {
       bills = bills.filter(item => item.id !== b.getAttribute('data-id'));
       saveData('ft_bills', bills);
+      showToast('Bill reminder deleted', 'info');
       renderBills();
+      refreshDashboard();
     });
   });
 }
 
-const billModalOverlay = document.getElementById('billModalOverlay');
-document.getElementById('addBillBtn').addEventListener('click', () => billModalOverlay.classList.add('open'));
+document.getElementById('addBillBtn').addEventListener('click', () => openBillModal());
 document.getElementById('billModalClose').addEventListener('click', () => billModalOverlay.classList.remove('open'));
 
 document.getElementById('billForm').addEventListener('submit', (e) => {
   e.preventDefault();
-  const title   = document.getElementById('billTitle').value.trim();
-  const amount  = parseFloat(document.getElementById('billAmount').value);
-  const dueDate = document.getElementById('billDueDate').value;
+  const editId   = document.getElementById('editBillId').value;
+  const title    = document.getElementById('billTitle').value.trim();
+  const amount   = parseFloat(document.getElementById('billAmount').value);
+  const dueDate  = document.getElementById('billDueDate').value;
+  const category = document.getElementById('billCategory').value || 'utilities';
 
   if (!title || !amount || !dueDate) return;
-  bills.push({ id: Date.now().toString(), title, amount, dueDate, paid: false });
+
+  if (editId) {
+    const idx = bills.findIndex(b => b.id === editId);
+    if (idx !== -1) {
+      bills[idx] = { ...bills[idx], title, amount, dueDate, category };
+      showToast('Bill reminder updated!', 'success');
+    }
+  } else {
+    bills.push({ id: Date.now().toString(), title, amount, dueDate, category, paid: false });
+    showToast('Bill reminder scheduled!', 'success');
+  }
+
   saveData('ft_bills', bills);
   billModalOverlay.classList.remove('open');
   document.getElementById('billForm').reset();
@@ -1251,6 +1670,7 @@ function renderCalendar() {
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     const dayTxns = transactions.filter(t => t.date === dateStr);
+    const dayBills = bills.filter(b => b.dueDate === dateStr);
 
     const spent = dayTxns.filter(t => t.type === 'expense').reduce((s,t) => s + Number(t.amount), 0);
     const inc   = dayTxns.filter(t => t.type === 'income').reduce((s,t) => s + Number(t.amount), 0);
@@ -1261,12 +1681,13 @@ function renderCalendar() {
     cell.innerHTML = `
       <div class="cal-day-num">${day}</div>
       <div>
+        ${dayBills.length > 0 ? `<div style="font-size:10px; color:var(--savings); font-weight:700; text-align:right"><i class="fas fa-file-invoice"></i> ${dayBills.length} Bill</div>` : ''}
         ${inc > 0 ? `<div class="cal-day-income">+${fmt(inc)}</div>` : ''}
         ${spent > 0 ? `<div class="cal-day-spent">-${fmt(spent)}</div>` : ''}
       </div>
     `;
 
-    cell.addEventListener('click', () => openDayDetailModal(dateStr, dayTxns));
+    cell.addEventListener('click', () => openDayDetailModal(dateStr, dayTxns, dayBills));
     grid.appendChild(cell);
   }
 }
@@ -1289,14 +1710,30 @@ document.getElementById('calTodayBtn').addEventListener('click', () => {
 const dayDetailModalOverlay = document.getElementById('dayDetailModalOverlay');
 document.getElementById('dayDetailModalClose').addEventListener('click', () => dayDetailModalOverlay.classList.remove('open'));
 
-function openDayDetailModal(dateStr, dayTxns) {
+function openDayDetailModal(dateStr, dayTxns, dayBills = []) {
   document.getElementById('dayDetailTitle').textContent = `Activity for ${fmtDate(dateStr)}`;
   const content = document.getElementById('dayDetailContent');
   content.innerHTML = '';
 
-  if (dayTxns.length === 0) {
-    content.innerHTML = '<p style="color:var(--text-muted)">No transactions recorded for this day.</p>';
-  } else {
+  if (dayBills.length > 0) {
+    const billSec = document.createElement('div');
+    billSec.innerHTML = `<h4 style="font-size:13px; margin-bottom:8px; color:var(--savings);"><i class="fas fa-file-invoice-dollar"></i> Bills Due on this Day:</h4>`;
+    dayBills.forEach(b => {
+      const bItem = document.createElement('div');
+      bItem.className = 'bill-item';
+      bItem.style.marginBottom = '8px';
+      bItem.style.padding = '8px 12px';
+      bItem.innerHTML = `<div><strong>${b.title}</strong> (${fmt(b.amount)})</div><span class="bill-status ${b.paid ? 'paid' : 'due-soon'}">${b.paid ? 'Paid' : 'Pending'}</span>`;
+      billSec.appendChild(bItem);
+    });
+    content.appendChild(billSec);
+  }
+
+  if (dayTxns.length === 0 && dayBills.length === 0) {
+    content.innerHTML = '<p style="color:var(--text-muted)">No transactions or bills scheduled for this day.</p>';
+  } else if (dayTxns.length > 0) {
+    const txnSec = document.createElement('div');
+    txnSec.innerHTML = `<h4 style="font-size:13px; margin: 12px 0 8px; color:var(--text);"><i class="fas fa-exchange-alt"></i> Transactions:</h4>`;
     dayTxns.forEach(t => {
       const cat = getCatInfo(t.category);
       const div = document.createElement('div');
@@ -1309,8 +1746,9 @@ function openDayDetailModal(dateStr, dayTxns) {
         </div>
         <div class="txn-amount ${t.type === 'income' ? 'credit' : 'debit'}">${t.type === 'income' ? '+' : '-'}${fmt(t.amount)}</div>
       `;
-      content.appendChild(div);
+      txnSec.appendChild(div);
     });
+    content.appendChild(txnSec);
   }
   dayDetailModalOverlay.classList.add('open');
 }
@@ -1330,28 +1768,59 @@ function renderReports() {
   const yoyIncome  = years.map(y => transactions.filter(t => t.type === 'income' && new Date(t.date).getFullYear() === y).reduce((s,t) => s + Number(t.amount), 0));
   const yoyExpense = years.map(y => transactions.filter(t => t.type === 'expense' && new Date(t.date).getFullYear() === y).reduce((s,t) => s + Number(t.amount), 0));
 
+  const c = getThemeColors();
+
   if (yoyChart) yoyChart.destroy();
   yoyChart = new Chart(yoyCtx, {
     type: 'bar',
     data: {
       labels: years.map(String),
       datasets: [
-        { label: 'Income', data: yoyIncome, backgroundColor: 'rgba(16,185,129,0.85)' },
-        { label: 'Expenses', data: yoyExpense, backgroundColor: 'rgba(244,63,94,0.85)' }
+        { label: 'Income', data: yoyIncome, backgroundColor: 'rgba(16,185,129,0.85)', borderRadius: 8 },
+        { label: 'Expenses', data: yoyExpense, backgroundColor: 'rgba(244,63,94,0.85)', borderRadius: 8 }
       ]
     },
-    options: CHART_DEFAULTS
+    options: {
+      ...CHART_DEFAULTS,
+      scales: {
+        x: { grid: { color: c.grid }, ticks: { color: c.text } },
+        y: { grid: { color: c.grid }, ticks: { color: c.text, callback: v => fmt(v) } }
+      }
+    }
   });
 
-  const annualBreakdown = getCategoryBreakdown(thisMonthStr());
+  // Annual spending breakdown calculated across the current full year
+  const annualExpenses = transactions.filter(t => t.type === 'expense' && new Date(t.date).getFullYear() === currentYr);
+  const annualMap = {};
+  annualExpenses.forEach(t => {
+    annualMap[t.category] = (annualMap[t.category] || 0) + Number(t.amount);
+  });
+
+  const annualBreakdown = Object.entries(annualMap).map(([id, value]) => {
+    const cat = getCatInfo(id);
+    return { label: cat.label, value, color: cat.color };
+  }).sort((a,b) => b.value - a.value);
+
   if (annualDonutChart) annualDonutChart.destroy();
   annualDonutChart = new Chart(annualCtx, {
     type: 'doughnut',
     data: {
-      labels: annualBreakdown.map(b => b.label),
-      datasets: [{ data: annualBreakdown.map(b => b.value), backgroundColor: annualBreakdown.map(b => b.color) }]
+      labels: annualBreakdown.length > 0 ? annualBreakdown.map(b => b.label) : ['No Data'],
+      datasets: [{
+        data: annualBreakdown.length > 0 ? annualBreakdown.map(b => b.value) : [1],
+        backgroundColor: annualBreakdown.length > 0 ? annualBreakdown.map(b => b.color) : ['rgba(255,255,255,0.08)'],
+        borderWidth: 0
+      }]
     },
-    options: { responsive: true, maintainAspectRatio: false, cutout: '65%' }
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '65%',
+      plugins: {
+        legend: { labels: { color: c.text, font: { family: 'Inter', size: 12 } } },
+        tooltip: { callbacks: { label: ctx => ' ' + fmt(ctx.parsed) } }
+      }
+    }
   });
 }
 
@@ -1361,47 +1830,154 @@ document.getElementById('printReportBtn').addEventListener('click', () => window
 // 19. CSV IMPORT & EXPORT
 // ================================================
 document.getElementById('exportBtn').addEventListener('click', () => {
-  if (transactions.length === 0) return alert('No transactions to export!');
-  const headers = ['Date', 'Type', 'Category', 'Description', 'Tag', 'Amount'];
-  const rows = transactions.map(t => [t.date, t.type, t.category, `"${(t.description||'').replace(/"/g,'""')}"`, t.tag||'', t.amount].join(','));
+  if (transactions.length === 0) {
+    showToast('No transactions to export!', 'info');
+    return;
+  }
+  const headers = ['Date', 'Type', 'Category', 'Description', 'Tag', 'Amount', 'Notes'];
+  const rows = transactions.map(t => [
+    t.date, 
+    t.type, 
+    t.category, 
+    `"${(t.description||'').replace(/"/g,'""')}"`, 
+    t.tag||'', 
+    t.amount,
+    `"${(t.notes||'').replace(/"/g,'""')}"`
+  ].join(','));
   const csv = [headers.join(','), ...rows].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `FinTrack_${thisMonthStr()}.csv`; a.click();
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a'); 
+  a.href = URL.createObjectURL(blob); 
+  a.download = `FinTrack_Export_${thisMonthStr()}.csv`; 
+  a.click();
+  showToast('Transactions exported as CSV', 'success');
 });
 
 const csvModalOverlay = document.getElementById('csvModalOverlay');
 const csvFileInput    = document.getElementById('csvFileInput');
+const csvDropzone     = document.getElementById('csvDropzone');
 let importedRows      = [];
 
-document.getElementById('importCsvBtn').addEventListener('click', () => csvModalOverlay.classList.add('open'));
+document.getElementById('importCsvBtn').addEventListener('click', () => {
+  importedRows = [];
+  document.getElementById('csvPreview').style.display = 'none';
+  csvModalOverlay.classList.add('open');
+});
+
 document.getElementById('csvModalClose').addEventListener('click', () => csvModalOverlay.classList.remove('open'));
 
-csvFileInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
+// Robust CSV Line Parser supporting quotes & commas
+function parseCsvLine(line) {
+  const result = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"' || char === "'") {
+      if (inQuotes && line[i+1] === char) {
+        cur += char;
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(cur.trim());
+      cur = '';
+    } else {
+      cur += char;
+    }
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+function handleCsvFile(file) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (evt) => {
     const text = evt.target.result;
-    const lines = text.split('\n').filter(Boolean);
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
     importedRows = [];
-    lines.slice(1).forEach(line => {
-      const cols = line.split(',');
-      if (cols.length >= 4) {
-        importedRows.push({
-          id: Date.now().toString() + Math.random(),
-          date: cols[0].trim() || new Date().toISOString().split('T')[0],
-          type: (cols[1]||'expense').toLowerCase().includes('inc') ? 'income' : 'expense',
-          category: cols[2].trim().toLowerCase() || 'other_ex',
-          description: (cols[3]||'Imported').replace(/"/g,'').trim(),
-          amount: parseFloat(cols[5] || cols[4]) || 100
-        });
+
+    if (lines.length <= 1) {
+      showToast('CSV file is empty or missing data rows.', 'error');
+      return;
+    }
+
+    const firstRow = parseCsvLine(lines[0]).map(h => h.toLowerCase().trim());
+    const hasHeader = firstRow.some(h => ['date', 'amount', 'type', 'description'].includes(h));
+    
+    let dateIdx = 0, typeIdx = 1, catIdx = 2, descIdx = 3, tagIdx = 4, amtIdx = 5, notesIdx = 6;
+    
+    if (hasHeader) {
+      dateIdx = firstRow.findIndex(h => h.includes('date'));
+      typeIdx = firstRow.findIndex(h => h.includes('type'));
+      catIdx  = firstRow.findIndex(h => h.includes('cat'));
+      descIdx = firstRow.findIndex(h => h.includes('desc') || h.includes('title') || h.includes('name'));
+      tagIdx  = firstRow.findIndex(h => h.includes('tag'));
+      amtIdx  = firstRow.findIndex(h => h.includes('amount') || h.includes('value') || h.includes('price'));
+      notesIdx= firstRow.findIndex(h => h.includes('note'));
+    }
+
+    const dataLines = hasHeader ? lines.slice(1) : lines;
+
+    dataLines.forEach(line => {
+      const cols = parseCsvLine(line);
+      if (cols.length >= 2) {
+        const rawAmt = amtIdx !== -1 && cols[amtIdx] !== undefined ? cols[amtIdx] : cols[cols.length - 1];
+        const parsedAmount = Math.abs(parseFloat(String(rawAmt).replace(/[^0-9.-]+/g, ''))) || 0;
+        
+        if (parsedAmount > 0) {
+          const rawDate = (dateIdx !== -1 && cols[dateIdx]) ? cols[dateIdx] : new Date().toISOString().split('T')[0];
+          const rawType = (typeIdx !== -1 && cols[typeIdx]) ? cols[typeIdx].toLowerCase() : (cols[1] || 'expense').toLowerCase();
+          const isIncome = rawType.includes('inc') || rawType.includes('cr') || rawType.includes('credit');
+          
+          importedRows.push({
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+            date: rawDate.length >= 10 ? rawDate.slice(0, 10) : new Date().toISOString().split('T')[0],
+            type: isIncome ? 'income' : 'expense',
+            category: (catIdx !== -1 && cols[catIdx] ? cols[catIdx].toLowerCase() : 'other_ex'),
+            description: (descIdx !== -1 && cols[descIdx] ? cols[descIdx] : 'Imported Entry'),
+            tag: (tagIdx !== -1 && cols[tagIdx] ? cols[tagIdx] : ''),
+            amount: parsedAmount,
+            notes: (notesIdx !== -1 && cols[notesIdx] ? cols[notesIdx] : 'Imported via CSV')
+          });
+        }
       }
     });
+
     document.getElementById('csvPreview').style.display = 'block';
-    document.getElementById('csvFileInfo').textContent = `Loaded ${importedRows.length} valid transactions from ${file.name}`;
+    document.getElementById('csvFileInfo').textContent = `Parsed ${importedRows.length} valid transactions from "${file.name}"`;
+    showToast(`Ready to import ${importedRows.length} transactions.`, 'info');
   };
   reader.readAsText(file);
+}
+
+csvFileInput.addEventListener('change', (e) => {
+  handleCsvFile(e.target.files[0]);
 });
+
+// Drag & drop support
+if (csvDropzone) {
+  ['dragenter', 'dragover'].forEach(name => {
+    csvDropzone.addEventListener(name, (e) => {
+      e.preventDefault();
+      csvDropzone.classList.add('dragover');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(name => {
+    csvDropzone.addEventListener(name, (e) => {
+      e.preventDefault();
+      csvDropzone.classList.remove('dragover');
+    });
+  });
+
+  csvDropzone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer && e.dataTransfer.files[0];
+    if (file) handleCsvFile(file);
+  });
+}
 
 document.getElementById('processCsvBtn').addEventListener('click', () => {
   if (importedRows.length > 0) {
@@ -1409,7 +1985,8 @@ document.getElementById('processCsvBtn').addEventListener('click', () => {
     saveData('ft_transactions', transactions);
     csvModalOverlay.classList.remove('open');
     refreshDashboard();
-    alert(`Successfully imported ${importedRows.length} transactions!`);
+    if (currentPage === 'transactions') renderTxnTable();
+    showToast(`Successfully imported ${importedRows.length} transactions!`, 'success');
   }
 });
 
@@ -1461,7 +2038,7 @@ document.getElementById('clearNotifs').addEventListener('click', () => {
   document.getElementById('notifList').innerHTML = '<p class="no-notif">No new notifications</p>';
 });
 
-// Budget Editor Page Save
+// Budget Editor Page
 function renderBudgetEditor() {
   const grid = document.getElementById('budgetEditorGrid');
   grid.innerHTML = '';
@@ -1474,7 +2051,7 @@ function renderBudgetEditor() {
         ${cat.label}
       </div>
       <div class="budget-editor-input-wrap">
-        <span class="budget-editor-prefix">${CURRENCIES[currentCurrency].symbol}</span>
+        <span class="budget-editor-prefix">${(CURRENCIES[currentCurrency] || CURRENCIES.INR).symbol}</span>
         <input class="budget-editor-input" type="number" min="0" step="100" data-cat="${cat.id}" value="${budgets[cat.id]||''}" />
       </div>
     `;
@@ -1492,6 +2069,7 @@ document.getElementById('saveBudgetsBtn').addEventListener('click', () => {
   const conf = document.getElementById('saveConfirmation');
   conf.style.display = 'flex';
   setTimeout(() => conf.style.display = 'none', 2500);
+  showToast('Monthly budgets saved!', 'success');
 });
 
 function updateChartThemes() {
@@ -1506,17 +2084,32 @@ function updateChartThemes() {
   });
 }
 
+// Universal Close on Modal Backdrop click & Escape Key
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.classList.remove('open');
+  });
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(modal => {
+      modal.classList.remove('open');
+    });
+  }
+});
+
 // ================================================
 // 21. AUTH UI & SESSION MANAGEMENT
 // ================================================
-const authScreen     = document.getElementById('authScreen');
-const tabSignIn      = document.getElementById('tabSignIn');
-const tabSignUp      = document.getElementById('tabSignUp');
-const signInForm     = document.getElementById('signInForm');
-const signUpForm     = document.getElementById('signUpForm');
-const loginError     = document.getElementById('loginError');
-const signUpError    = document.getElementById('signUpError');
-const guestLoginBtn  = document.getElementById('guestLoginBtn');
+const authScreen       = document.getElementById('authScreen');
+const tabSignIn        = document.getElementById('tabSignIn');
+const tabSignUp        = document.getElementById('tabSignUp');
+const signInForm       = document.getElementById('signInForm');
+const signUpForm       = document.getElementById('signUpForm');
+const loginError       = document.getElementById('loginError');
+const signUpError      = document.getElementById('signUpError');
+const guestLoginBtn    = document.getElementById('guestLoginBtn');
 const sidebarLogoutBtn = document.getElementById('sidebarLogoutBtn');
 const modalLogoutBtn   = document.getElementById('modalLogoutBtn');
 
@@ -1556,13 +2149,13 @@ signInForm.addEventListener('submit', (e) => {
     return;
   }
 
-  // Success Sign In
   currentSession = account.email;
   localStorage.setItem('ft_current_session', currentSession);
   authScreen.style.display = 'none';
   reloadCurrentUserData();
   checkPinOnLaunch();
   refreshDashboard();
+  showToast(`Welcome back, ${userProfile.name}!`, 'success');
 });
 
 // Sign Up Form Submit
@@ -1585,13 +2178,13 @@ signUpForm.addEventListener('submit', (e) => {
   accounts.push(newAccount);
   saveRawData('ft_accounts', accounts);
 
-  // Success Sign Up -> Auto Sign In
   currentSession = email;
   localStorage.setItem('ft_current_session', currentSession);
   authScreen.style.display = 'none';
   reloadCurrentUserData();
   checkPinOnLaunch();
   refreshDashboard();
+  showToast(`Account created! Welcome to FinTrack, ${name}.`, 'success');
 });
 
 // Guest Mode Login
@@ -1602,15 +2195,22 @@ guestLoginBtn.addEventListener('click', () => {
   reloadCurrentUserData();
   checkPinOnLaunch();
   refreshDashboard();
+  showToast('Logged in as Guest (Sandbox Mode)', 'info');
 });
 
-// Sign Out Handler
+// Sign Out Handler with state cleanup
 function signOutUser() {
   if (confirm('Are you sure you want to log out?')) {
     localStorage.removeItem('ft_current_session');
     currentSession = null;
+    transactions = [];
+    budgets = {};
+    goals = [];
+    debts = [];
+    bills = [];
     profileModalOverlay.classList.remove('open');
     authScreen.style.display = 'flex';
+    showToast('You have been logged out.', 'info');
   }
 }
 
@@ -1629,8 +2229,102 @@ function checkAuthSession() {
 }
 
 // ================================================
-// 22. INIT LAUNCH
+// 22. DEMO / SAMPLE DATA GENERATOR
+// ================================================
+function loadDemoData() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = d.getMonth();
+
+  function makeDate(monthsAgo, day) {
+    const target = new Date(y, m - monthsAgo, day);
+    return `${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  }
+
+  transactions = [
+    // Current Month
+    { id: 'd1',  type: 'income',  category: 'salary',     description: 'Monthly Corporate Salary', amount: 85000, date: makeDate(0, 1),  tag: '#work', recurring: true, recurringFreq: 'monthly' },
+    { id: 'd2',  type: 'income',  category: 'freelance',  description: 'UI/UX Mobile Redesign',    amount: 28000, date: makeDate(0, 12), tag: '#sidegig', notes: 'Design sprint payment' },
+    { id: 'd3',  type: 'expense', category: 'housing',    description: 'Apartment Monthly Rent',   amount: 18000, date: makeDate(0, 2),  tag: '#fixed', recurring: true, recurringFreq: 'monthly' },
+    { id: 'd4',  type: 'expense', category: 'food',       description: 'Supermarket Groceries',    amount: 4600,  date: makeDate(0, 5),  tag: '#home' },
+    { id: 'd5',  type: 'expense', category: 'utilities',  description: 'Broadband Fiber Internet', amount: 1499,  date: makeDate(0, 8),  tag: '#bills' },
+    { id: 'd6',  type: 'expense', category: 'transport',  description: 'Fuel & EV Charging',       amount: 3200,  date: makeDate(0, 10), tag: '#commute' },
+    { id: 'd7',  type: 'expense', category: 'food',       description: 'Weekend Dining & Sushi',   amount: 2800,  date: makeDate(0, 15), tag: '#fun' },
+    { id: 'd8',  type: 'expense', category: 'shopping',   description: 'Wireless Headphones',      amount: 4500,  date: makeDate(0, 18), tag: '#gear' },
+    { id: 'd9',  type: 'expense', category: 'health',     description: 'Annual Health Checkup',    amount: 2200,  date: makeDate(0, 20), tag: '#wellness' },
+
+    // Previous Month
+    { id: 'd10', type: 'income',  category: 'salary',     description: 'Monthly Corporate Salary', amount: 85000, date: makeDate(1, 1),  tag: '#work', recurring: true },
+    { id: 'd11', type: 'income',  category: 'investment', description: 'Quarterly Stock Dividend', amount: 6400,  date: makeDate(1, 14), tag: '#passive' },
+    { id: 'd12', type: 'expense', category: 'housing',    description: 'Apartment Monthly Rent',   amount: 18000, date: makeDate(1, 2),  tag: '#fixed' },
+    { id: 'd13', type: 'expense', category: 'food',       description: 'Grocery Provisions',       amount: 5100,  date: makeDate(1, 7) },
+    { id: 'd14', type: 'expense', category: 'entertainment', description: 'Concert Passes',        amount: 3500,  date: makeDate(1, 18), tag: '#vacation' },
+
+    // 2 Months Ago
+    { id: 'd15', type: 'income',  category: 'salary',     description: 'Monthly Corporate Salary', amount: 85000, date: makeDate(2, 1),  tag: '#work' },
+    { id: 'd16', type: 'expense', category: 'housing',    description: 'Apartment Monthly Rent',   amount: 18000, date: makeDate(2, 2),  tag: '#fixed' },
+    { id: 'd17', type: 'expense', category: 'shopping',   description: 'Home Office Ergonomic Chair', amount: 9200, date: makeDate(2, 12), tag: '#wfh' },
+
+    // 3 Months Ago
+    { id: 'd18', type: 'income',  category: 'salary',     description: 'Monthly Corporate Salary', amount: 85000, date: makeDate(3, 1),  tag: '#work' },
+    { id: 'd19', type: 'expense', category: 'housing',    description: 'Apartment Monthly Rent',   amount: 18000, date: makeDate(3, 2),  tag: '#fixed' },
+    { id: 'd20', type: 'expense', category: 'transport',  description: 'Vehicle Maintenance Service', amount: 6200, date: makeDate(3, 16) },
+  ];
+
+  budgets = {
+    housing: 20000,
+    food: 12000,
+    transport: 6000,
+    shopping: 8000,
+    utilities: 3000,
+    entertainment: 5000,
+    health: 4000
+  };
+
+  goals = [
+    { id: 'g1', title: '6-Month Emergency Fund', target: 250000, current: 165000, targetDate: makeDate(-6, 30) },
+    { id: 'g2', title: 'Tokyo Autumn Trip',       target: 120000, current: 84000,  targetDate: makeDate(-4, 15) },
+    { id: 'g3', title: 'M3 MacBook Pro Upgrade',  target: 180000, current: 95000,  targetDate: makeDate(-2, 28) },
+  ];
+
+  debts = [
+    { id: 'db1', title: 'Car Loan (EV)', total: 450000, paid: 280000, interest: 7.8 },
+    { id: 'db2', title: 'Premium Credit Card Balance', total: 45000, paid: 32000, interest: 13.5 },
+  ];
+
+  const nextDue = new Date(y, m, 25).toISOString().split('T')[0];
+  const laterDue = new Date(y, m + 1, 5).toISOString().split('T')[0];
+
+  bills = [
+    { id: 'b1', title: 'Electricity & Grid Power', amount: 2450, dueDate: nextDue,  category: 'utilities', paid: false },
+    { id: 'b2', title: 'Fiber Broadband',           amount: 1499, dueDate: laterDue, category: 'utilities', paid: false },
+    { id: 'b3', title: 'Cloud Storage & Workspace', amount: 890,  dueDate: makeDate(0, 10), category: 'utilities', paid: true }
+  ];
+
+  saveData('ft_transactions', transactions);
+  saveData('ft_budgets', budgets);
+  saveData('ft_goals', goals);
+  saveData('ft_debts', debts);
+  saveData('ft_bills', bills);
+
+  refreshDashboard();
+  if (currentPage === 'transactions') renderTxnTable();
+  if (currentPage === 'budget')       renderBudgetEditor();
+  if (currentPage === 'savings')      renderSavingsGoals();
+  if (currentPage === 'debts')        renderDebts();
+  if (currentPage === 'bills')        renderBills();
+  if (currentPage === 'calendar')     renderCalendar();
+  if (currentPage === 'reports')      renderReports();
+
+  showToast('Realistic demo data loaded successfully!', 'success');
+}
+
+const emptyDemoBtn = document.getElementById('emptyDemoBtn');
+if (emptyDemoBtn) emptyDemoBtn.addEventListener('click', loadDemoData);
+
+// ================================================
+// 23. INIT LAUNCH
 // ================================================
 checkAuthSession();
 
-console.log('%c💰 FinTrack Ultimate Loaded with Authentication & Guest Mode!', 'color: #6c63ff; font-size: 18px; font-weight: bold;');
+console.log('%c💰 FinTrack Ultimate Loaded with Complete Features & Enhancements!', 'color: #6c63ff; font-size: 16px; font-weight: bold;');

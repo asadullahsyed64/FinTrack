@@ -865,6 +865,12 @@ body {
   text-align: center;
   background: var(--accent-bg);
   cursor: pointer;
+  transition: all 0.2s ease;
+}
+.csv-dropzone.dragover {
+  background: rgba(108,99,255,0.25);
+  border-color: #fff;
+  transform: scale(1.02);
 }
 .drop-icon { font-size: 40px; color: var(--accent); margin-bottom: 12px; }
 .csv-label { color: var(--accent); font-weight: 700; text-decoration: underline; cursor: pointer; }
@@ -955,6 +961,7 @@ select option {
 /* Empty state & coming soon */
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 80px 20px; gap: 16px; }
 .empty-icon { width: 80px; height: 80px; border-radius: 50%; background: var(--accent-bg); border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center; font-size: 32px; color: var(--accent); }
+.empty-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
 
 @keyframes fadeSlideUp {
   from { opacity: 0; transform: translateY(16px); }
@@ -1140,6 +1147,56 @@ select option {
   body { background: #fff !important; color: #000 !important; }
 }
 
+/* Toast Notifications */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 99999;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 12px 20px;
+  border-radius: 12px;
+  background: var(--modal-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  font-size: 13.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: fadeSlideUp 0.25s ease both;
+  pointer-events: all;
+}
+.toast.success { border-color: var(--income); }
+.toast.success i { color: var(--income); }
+.toast.error { border-color: var(--expense); }
+.toast.error i { color: var(--expense); }
+.toast.info { border-color: var(--accent); }
+.toast.info i { color: var(--accent); }
+
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(4px);
+  z-index: 95;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.sidebar-backdrop.active {
+  opacity: 1;
+  pointer-events: all;
+}
+
 /* RESPONSIVE */
 @media (max-width: 1280px) {
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1150,7 +1207,21 @@ select option {
 
 @media (max-width: 768px) {
   .sidebar { width: 68px; }
-  .sidebar .logo-text, .sidebar .nav-item span, .sidebar .user-info { opacity: 0; width: 0; overflow: hidden; }
+  .sidebar.mobile-open {
+    width: 240px;
+    z-index: 105;
+    box-shadow: 4px 0 30px rgba(0,0,0,0.6);
+  }
+  .sidebar.mobile-open .logo-text,
+  .sidebar.mobile-open .nav-item span,
+  .sidebar.mobile-open .user-info {
+    opacity: 1;
+    width: auto;
+    overflow: visible;
+  }
+  .sidebar.mobile-open .logout-btn span {
+    display: inline;
+  }
   .main { margin-left: 68px; padding: 0 16px 32px; }
   .goals-grid, .debts-grid { grid-template-columns: 1fr; }
   .topbar { padding-left: 16px; padding-right: 16px; margin: 0 -16px; }
